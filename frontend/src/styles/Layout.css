@@ -1,0 +1,92 @@
+/* src/components/Layout.css */
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.header {
+  background: transparent !important;
+  backdrop-filter: blur(8px);
+  box-shadow: none !important;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.main-content {
+  flex: 1;
+  margin-top: 64px;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.home-content {
+  height: 100%;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.page-content {
+  height: 100%;
+  background: #ffffff;
+}
+
+/* Estilos para el menú de usuario */
+.MuiMenu-paper {
+  border-radius: 8px !important;
+  margin-top: 8px !important;
+}
+
+.MuiMenuItem-root {
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+}
+
+.MuiMenuItem-root:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Asegurar que el Toolbar tenga la altura correcta */
+.MuiToolbar-root {
+  min-height: 64px !important;
+  padding: 0 16px !important;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 1200px;
+    position: relative;
+    height: 100%;
+}
+
+.header-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+}
+
+.header-right {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    z-index: 3;
+    padding-right: 2rem;
+}
+
+.header .MuiIconButton-root {
+    transition: all 0.2s ease;
+}
+
+.header .MuiIconButton-root:hover {
+    transform: scale(1.05);
+} 
