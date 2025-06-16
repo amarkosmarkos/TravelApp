@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Box, Drawer, List, ListItem, ListItemIcon, ListItemText, Typography, Paper, Dialog } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Box, Drawer, List, ListItem, ListItemIcon, ListItemText, Typography, Paper, Dialog, ListItemButton } from '@mui/material';
 import ChatIcon from '@mui/icons-material/Chat';
 import MapIcon from '@mui/icons-material/Map';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
@@ -14,6 +14,35 @@ const MainCanvas = () => {
     const [itineraryCities, setItineraryCities] = useState([]);
     const [selectedTravel, setSelectedTravel] = useState(null);
     const [showTravelList, setShowTravelList] = useState(false);
+
+    // Cargar el primer viaje al montar el componente
+    useEffect(() => {
+        const loadFirstTravel = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch('http://localhost:8000/api/travels', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error al cargar los viajes');
+                }
+
+                const travels = await response.json();
+                if (travels && travels.length > 0) {
+                    setSelectedTravel(travels[0]);
+                }
+            } catch (error) {
+                console.error('Error al cargar el primer viaje:', error);
+            }
+        };
+
+        loadFirstTravel();
+    }, []);
 
     const handleMenuClick = (item) => {
         setSelectedItem(item);
@@ -74,29 +103,29 @@ const MainCanvas = () => {
                         }}
                         onClick={() => setShowTravelList(true)}
                     >
-                        {selectedTravel ? `${selectedTravel.name} - ${selectedTravel.region}` : 'Viaje por determinar'}
+                        {selectedTravel ? selectedTravel.title : 'Viaje por determinar'}
                     </Typography>
                 </Box>
                 <List sx={{ overflow: 'auto' }}>
                     {menuItems.map((item) => (
-                        <ListItem 
-                            button 
-                            key={item.value}
-                            onClick={() => handleMenuClick(item.value)}
-                            selected={selectedItem === item.value}
-                            sx={{
-                                '&.Mui-selected': {
-                                    backgroundColor: 'rgba(0, 0, 0, 0.08)',
-                                    '&:hover': {
-                                        backgroundColor: 'rgba(0, 0, 0, 0.12)',
+                        <ListItem key={item.value} disablePadding>
+                            <ListItemButton
+                                onClick={() => handleMenuClick(item.value)}
+                                selected={selectedItem === item.value}
+                                sx={{
+                                    '&.Mui-selected': {
+                                        backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                        '&:hover': {
+                                            backgroundColor: 'rgba(0, 0, 0, 0.12)',
+                                        },
                                     },
-                                },
-                            }}
-                        >
-                            <ListItemIcon>
-                                {item.icon}
-                            </ListItemIcon>
-                            <ListItemText primary={item.text} />
+                                }}
+                            >
+                                <ListItemIcon>
+                                    {item.icon}
+                                </ListItemIcon>
+                                <ListItemText primary={item.text} />
+                            </ListItemButton>
                         </ListItem>
                     ))}
                 </List>
@@ -114,13 +143,21 @@ const MainCanvas = () => {
                     flexDirection: 'column'
                 }}
             >
-                {selectedItem === 'chat' ? (
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                        <ChatSection onTravelResponse={handleTravelResponse} travelId={selectedTravel?.id} />
-                    </Box>
-                ) : selectedItem === 'itinerary' ? (
-                    <ItinerarySection cities={itineraryCities} travelId={selectedTravel?.id} />
-                ) : (
+                {/* ChatSection siempre montado pero oculto cuando no está activo */}
+                <Box sx={{ 
+                    display: selectedItem === 'chat' ? 'flex' : 'none',
+                    flex: 1,
+                    flexDirection: 'column',
+                    minHeight: 0
+                }}>
+                    <ChatSection onTravelResponse={handleTravelResponse} travelId={selectedTravel?._id} />
+                </Box>
+
+                {/* Otros componentes */}
+                {selectedItem === 'itinerary' && (
+                    <ItinerarySection cities={itineraryCities} travelId={selectedTravel?._id} />
+                )}
+                {selectedItem !== 'chat' && selectedItem !== 'itinerary' && (
                     <Paper sx={{ p: 3 }}>
                         <Typography variant="h5">
                             {menuItems.find(item => item.value === selectedItem)?.text}

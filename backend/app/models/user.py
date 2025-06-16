@@ -3,6 +3,16 @@ from typing import List, Optional
 from datetime import datetime
 from .base import PyObjectId, MongoBaseModel
 
+# Token models
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class TokenData(BaseModel):
+    sub: str  # ID del usuario
+    exp: Optional[datetime] = None
+
+# Base user model
 class UserBase(BaseModel):
     email: EmailStr
     full_name: str
@@ -18,9 +28,11 @@ class UserBase(BaseModel):
         }
     }
 
+# User creation model
 class UserCreate(UserBase):
     password: str
 
+# User update model
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
@@ -29,6 +41,7 @@ class UserUpdate(BaseModel):
     roles: Optional[List[str]] = None
     permissions: Optional[List[str]] = None
 
+# Database user model
 class UserInDB(UserBase, MongoBaseModel):
     hashed_password: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -37,18 +50,35 @@ class UserInDB(UserBase, MongoBaseModel):
 
     @classmethod
     def from_mongo(cls, data: dict):
-        """Convertir documento de MongoDB a UserInDB"""
+        """Convert MongoDB document to UserInDB"""
         if not data:
             return None
         id = data.pop('_id', None)
         return cls(**dict(data, _id=id))
 
-class User(UserBase, MongoBaseModel):
+# Response user model
+class User(UserBase):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    last_login: Optional[datetime] = None
+    is_active: bool = True
+    is_superuser: bool = False
 
-# Roles y permisos predefinidos
+    class Config:
+        allow_population_by_field_name = True
+        json_encoders = {
+            PyObjectId: str
+        }
+        schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "full_name": "John Doe",
+                "is_active": True,
+                "is_superuser": False
+            }
+        }
+
+# Predefined roles and permissions
 ROLES = {
     "admin": [
         "manage_users",
@@ -68,5 +98,6 @@ ROLES = {
 }
 
 def get_role_permissions(role: str) -> List[str]:
+    """Get permissions for a given role"""
     return ROLES.get(role, [])
 

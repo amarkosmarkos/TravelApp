@@ -12,7 +12,7 @@ const ProfilePage = () => {
       const token = localStorage.getItem("token"); // Obtenemos el token del localStorage
       if (token) {
         try {
-          const response = await axios.get("http://localhost:8000/users/profile", {
+          const response = await axios.get("http://localhost:8000/api/users/profile", {
             headers: { Authorization: `Bearer ${token}` }, // Enviamos el token en los headers
           });
           setUserData(response.data); // Guardamos los datos del usuario en el estado

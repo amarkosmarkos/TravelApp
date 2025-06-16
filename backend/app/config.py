@@ -63,13 +63,18 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_DEPLOYMENT_NAME: str
+    
+    # API settings
+    API_V1_STR: str = "/api"
+    
+    # WebSocket settings
+    WS_URL: str = "ws://localhost:8000"
 
     class Config:
-        # Load environment variables from .env file in development
         env_file = ".env"
         env_file_encoding = "utf-8"
-        # Allow overriding via OS environment variables in production
         case_sensitive = True
+        extra = "ignore"  # Ignorar variables de entorno no definidas en el modelo
 
 # Instantiate settings (reads from .env or environment)
 settings = Settings()

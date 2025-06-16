@@ -31,7 +31,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                 const token = localStorage.getItem('token');
                 if (!token) return;
 
-                const response = await fetch('http://localhost:8000/travels/', {
+                const response = await fetch('http://localhost:8000/api/travels/', {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -62,14 +62,16 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
 
             console.log('Sending request with token:', token);
 
-            const response = await fetch('http://localhost:8000/travels/', {
+            const response = await fetch('http://localhost:8000/api/travels/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    name: newTravelName.trim()
+                    title: newTravelName.trim(),
+                    destination: "To be determined", // Default value, can be updated later
+                    status: "planned"
                 })
             });
 
@@ -96,7 +98,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
     return (
         <Box sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}>
             <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">Mis Viajes</Typography>
+                <Typography variant="h6" component="h2">Mis Viajes</Typography>
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}
@@ -121,9 +123,9 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                     </Box>
                 ) : (
                     travels.map((travel) => (
-                        <ListItem key={travel.id} disablePadding>
+                        <ListItem key={travel._id} disablePadding>
                             <ListItemButton
-                                selected={selectedTravel?.id === travel.id}
+                                selected={selectedTravel?._id === travel._id}
                                 onClick={() => onSelectTravel(travel)}
                                 sx={{
                                     '&.Mui-selected': {
@@ -135,9 +137,10 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                                 }}
                             >
                                 <ListItemText
-                                    primary={travel.name}
+                                    primary={travel.title || 'Sin título'}
                                     primaryTypographyProps={{
-                                        fontWeight: selectedTravel?.id === travel.id ? 'bold' : 'normal'
+                                        fontWeight: selectedTravel?._id === travel._id ? 'bold' : 'normal',
+                                        fontSize: '1rem'
                                     }}
                                 />
                             </ListItemButton>

@@ -18,7 +18,7 @@ export const ProtectedRoute = ({ children }) => {
       }
 
       try {
-        const response = await fetch('http://localhost:8000/auth/me', {
+        const response = await fetch('http://localhost:8000/api/auth/me', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -72,7 +72,7 @@ export const PublicRoute = ({ children }) => {
       }
 
       try {
-        const response = await fetch('http://localhost:8000/auth/me', {
+        const response = await fetch('http://localhost:8000/api/auth/me', {
           headers: {
             'Authorization': `Bearer ${token}`
           }

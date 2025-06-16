@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, status, WebSocket, WebSocketDisconnect, Query
 from app.travel_assistant import travel_assistant
+from app.services.chat_service import chat_service
 from typing import List, Optional
 from pydantic import BaseModel
 from app.database import (
@@ -11,7 +12,9 @@ from app.database import (
     get_visits_collection,
     get_places_collection,
     get_flights_collection,
-    get_messages_collection
+    get_messages_collection,
+    get_database,
+    get_users_collection
 )
 from ..models.travel import (
     Travel, TravelCreate, TravelUpdate,
@@ -30,6 +33,10 @@ import logging
 import json
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.crud import travel as travel_crud
+import jwt
+from jwt.exceptions import InvalidTokenError
+from app.config import settings
+from ..middleware.auth import get_current_user, verify_ws_token, verify_travel_access
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -51,13 +58,22 @@ class TravelResponse(BaseModel):
     user_message: str
 
 @router.post("/travel", response_model=TravelResponse)
-async def process_travel_request(request: Request, current_user: User = Depends(get_current_active_user)):
+async def process_travel_request(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
     try:
         body = await request.json()
         travel_request = TravelRequest(**body)
         
-        # Process the message with the verified user_id
-        response = await travel_assistant.process_message(travel_request.message, str(current_user.id))
+        # Procesar el mensaje con el servicio de chat
+        response = await chat_service.process_message(
+            message=travel_request.message,
+            user_id=str(current_user.id),
+            travel_id=body.get("travel_id"),
+            db=db
+        )
         return TravelResponse(**response)
         
     except Exception as e:
@@ -235,91 +251,88 @@ async def delete_travel(
             detail="Error al eliminar el viaje"
         )
 
-# Chat Messages
-@router.get("/{travel_id}/chat", response_model=List[ChatMessage])
+# Chat endpoints
+@router.get("/api/travels/{travel_id}/chat", response_model=List[Message])
 async def get_chat_messages(
     travel_id: str,
     current_user: User = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_database),
     skip: int = 0,
     limit: int = 50
 ):
+    """
+    Obtiene los mensajes de un chat específico.
+    """
     try:
-        logger.info(f"Obteniendo mensajes de chat para viaje {travel_id}")
-        chat_messages = await db.chat_messages()
-        
-        # Verificar que el viaje existe y pertenece al usuario
-        travels = await get_travels_collection()
-        travel = await travels.find_one({
-            "_id": ObjectId(travel_id),
-            "user_id": str(current_user.id)
-        })
-        
-        if not travel:
-            logger.warning(f"Viaje {travel_id} no encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Viaje no encontrado"
-            )
-        
-        # Obtener los mensajes
-        cursor = chat_messages.find({"travel_id": travel_id}).skip(skip).limit(limit)
-        return [ChatMessage(**doc) async for doc in cursor]
+        messages = await chat_service.get_chat_messages(
+            travel_id=travel_id,
+            user_id=str(current_user.id),
+            db=db,
+            skip=skip,
+            limit=limit
+        )
+        return messages
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error obteniendo mensajes de chat: {str(e)}")
+        logger.error(f"Error getting chat messages: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al obtener los mensajes de chat"
+            detail="Error getting chat messages"
         )
 
-@router.post("/{travel_id}/chat", response_model=ChatMessage)
+@router.post("/api/travels/{travel_id}/chat", response_model=Message)
 async def create_chat_message(
     travel_id: str,
-    message: ChatMessageCreate,
-    current_user: User = Depends(get_current_active_user)
+    message: MessageCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_database)
 ):
+    """
+    Crea un nuevo mensaje en el chat.
+    """
     try:
-        logger.info(f"Creando mensaje de chat para viaje {travel_id}")
-        chat_messages = await db.chat_messages()
-        
-        # Verificar que el viaje existe y pertenece al usuario
-        travels = await get_travels_collection()
-        travel = await travels.find_one({
-            "_id": ObjectId(travel_id),
-            "user_id": str(current_user.id)
-        })
-        
-        if not travel:
-            logger.warning(f"Viaje {travel_id} no encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Viaje no encontrado"
-            )
-        
-        # Crear el mensaje
-        chat_message = ChatMessageCreate(
+        created_message = await chat_service.create_message(
+            db=db,
             travel_id=travel_id,
-            content=message.content,
-            is_user=message.is_user,
-            timestamp=datetime.utcnow()
+            user_id=str(current_user.id),
+            message=message
         )
-        
-        # Insertar en la base de datos
-        result = await chat_messages.insert_one(chat_message.dict())
-        
-        # Obtener el mensaje creado
-        created_message = await chat_messages.find_one({"_id": result.inserted_id})
-        logger.info(f"Mensaje de chat creado exitosamente: {created_message['_id']}")
-        
-        return ChatMessage(**created_message)
+        return created_message
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creando mensaje de chat: {str(e)}")
+        logger.error(f"Error creating chat message: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al crear el mensaje de chat"
+            detail="Error creating chat message"
+        )
+
+@router.post("/{travel_id}/chat/process", response_model=dict)
+async def process_chat_message(
+    travel_id: str,
+    request: TravelRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Procesa un mensaje del usuario y genera una respuesta del asistente.
+    """
+    try:
+        response = await chat_service.process_message(
+            travel_id=travel_id,
+            user_id=str(current_user.id),
+            message=request.message,
+            db=db
+        )
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing chat message: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error processing chat message"
         )
 
 # Itinerary Items
@@ -500,27 +513,89 @@ async def process_travel_message(
 @router.get("/{travel_id}/messages", response_model=List[Message])
 async def get_travel_messages(
     travel_id: str,
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    skip: int = 0,
+    limit: int = 50
 ):
-    messages = await travel_crud.get_travel_messages(travel_id)
-    return messages
+    try:
+        logger.info(f"Obteniendo mensajes para viaje {travel_id}")
+        
+        # Verificar que el viaje existe y pertenece al usuario
+        travels = await get_travels_collection()
+        travel = await travels.find_one({
+            "_id": ObjectId(travel_id),
+            "user_id": str(current_user.id)
+        })
+        
+        if not travel:
+            logger.warning(f"Viaje {travel_id} no encontrado")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Travel not found"
+            )
+
+        # Obtener o crear la conversación para este viaje
+        conversations = await get_chats_collection()
+        conversation = await conversations.find_one({"travel_id": travel_id})
+        
+        if not conversation:
+            logger.info(f"Creando nueva conversación para viaje {travel_id}")
+            # Crear nueva conversación si no existe
+            conversation = {
+                "travel_id": travel_id,
+                "user_id": str(current_user.id),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            result = await conversations.insert_one(conversation)
+            conversation["_id"] = result.inserted_id
+            logger.info(f"Conversación creada: {conversation['_id']}")
+
+        # Obtener los mensajes de la conversación
+        messages = await get_messages_collection()
+        cursor = messages.find({
+            "conversation_id": str(conversation["_id"]),
+            "travel_id": travel_id
+        }).sort("timestamp", -1).skip(skip).limit(limit)
+        
+        message_list = [Message(**doc) async for doc in cursor]
+        logger.info(f"Encontrados {len(message_list)} mensajes")
+        
+        # Invertir la lista para mostrar los mensajes en orden cronológico
+        message_list.reverse()
+        
+        return message_list
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting messages: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting messages: {str(e)}"
+        )
 
 @router.post("/{travel_id}/messages", response_model=Message)
 async def create_travel_message(
     travel_id: str,
     message: MessageCreate,
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncIOMotorDatabase = Depends(get_database)
 ):
-    # Verificar que el viaje existe y pertenece al usuario
-    travel = await travel_crud.get_travel(travel_id)
-    if not travel:
-        raise HTTPException(status_code=404, detail="Travel not found")
-    if travel.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this travel")
-    
-    # Crear el mensaje
-    created_message = await travel_crud.create_travel_message(travel_id, message)
-    return created_message
+    try:
+        created_message = await chat_service.create_message(
+            travel_id=travel_id,
+            user_id=str(current_user.id),
+            content=message.message,
+            is_user=message.is_user,
+            db=db
+        )
+        return created_message
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating message: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error creating message")
 
 @router.get("/", response_model=List[Travel])
 async def get_travels(
@@ -578,4 +653,112 @@ async def delete_travel(
         raise HTTPException(status_code=403, detail="Not authorized to delete this travel")
     
     await travel_crud.delete_travel(travel_id)
-    return {"message": "Travel deleted successfully"} 
+    return {"message": "Travel deleted successfully"}
+
+# WebSocket endpoint
+@router.websocket("/{travel_id}/ws")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    travel_id: str,
+    token: str = Query(...),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    try:
+        # Verificar token y obtener user_id
+        user_id = await verify_ws_token(token)
+        if not user_id:
+            await websocket.close(code=4001)
+            return
+
+        # Verificar acceso al viaje
+        if not await verify_travel_access(travel_id, user_id, db):
+            await websocket.close(code=4004)
+            return
+
+        # Aceptar conexión WebSocket
+        await websocket.accept()
+        logger.info(f"WebSocket connection accepted for user {user_id} and travel {travel_id}")
+
+        # Agregar conexión a la lista de conexiones activas
+        if travel_id not in active_connections:
+            active_connections[travel_id] = set()
+        active_connections[travel_id].add(websocket)
+
+        try:
+            while True:
+                # Recibir mensaje
+                data = await websocket.receive_text()
+                message_data = json.loads(data)
+                logger.info(f"Received message: {message_data}")
+
+                # Procesar mensaje
+                response = await chat_service.process_message(
+                    travel_id=travel_id,
+                    user_id=user_id,
+                    message=message_data["data"]["message"],
+                    db=db
+                )
+
+                # Enviar respuesta
+                await websocket.send_json(response)
+                logger.info(f"Sent response: {response}")
+
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for user {user_id} and travel {travel_id}")
+        finally:
+            # Remover conexión de la lista de conexiones activas
+            if travel_id in active_connections:
+                active_connections[travel_id].remove(websocket)
+                if not active_connections[travel_id]:
+                    del active_connections[travel_id]
+
+    except Exception as e:
+        logger.error(f"Error in WebSocket endpoint: {str(e)}", exc_info=True)
+        try:
+            await websocket.close(code=1011)
+        except:
+            pass
+
+@router.get("/{travel_id}/chat", response_model=List[Message])
+async def get_chat_messages(
+    travel_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    skip: int = 0,
+    limit: int = 50
+):
+    """
+    Obtiene los mensajes de un chat específico.
+    """
+    try:
+        return await chat_service.get_chat_messages(
+            travel_id=travel_id,
+            user_id=str(current_user.id),
+            db=db,
+            skip=skip,
+            limit=limit
+        )
+    except Exception as e:
+        logger.error(f"Error getting chat messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{travel_id}/chat", response_model=Message)
+async def create_chat_message(
+    travel_id: str,
+    message: MessageCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Crea un nuevo mensaje en un chat.
+    """
+    try:
+        return await chat_service.create_message(
+            db=db,
+            travel_id=travel_id,
+            user_id=str(current_user.id),
+            message=message
+        )
+    except Exception as e:
+        logger.error(f"Error creating chat message: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 

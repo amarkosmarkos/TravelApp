@@ -49,87 +49,110 @@ async def get_travels_collection():
     database = await get_database()
     return database.travels
 
-def get_chats_collection():
+async def get_chats_collection():
     """Obtiene la colección de chats."""
-    return get_database().chats
+    database = await get_database()
+    return database.chats
 
 async def get_messages_collection():
     """Obtiene la colección de mensajes."""
     database = await get_database()
     return database.messages
 
-def get_chat_messages_collection():
+async def get_chat_messages_collection():
     """Obtiene la colección de mensajes de chat."""
-    return get_database().chat_messages
+    database = await get_database()
+    return database.chat_messages
 
 async def get_notifications_collection():
     """Obtiene la colección de notificaciones."""
     database = await get_database()
     return database.notifications
 
-def get_files_collection():
+async def get_files_collection():
     """Obtiene la colección de archivos."""
-    return get_database().files
+    database = await get_database()
+    return database.files
 
-def get_events_collection():
+async def get_events_collection():
     """Obtiene la colección de eventos."""
-    return get_database().events
+    database = await get_database()
+    return database.events
 
-def get_tasks_collection():
+async def get_tasks_collection():
     """Obtiene la colección de tareas."""
-    return get_database().tasks
+    database = await get_database()
+    return database.tasks
 
-def get_rooms_collection():
+async def get_rooms_collection():
     """Obtiene la colección de salas."""
-    return get_database().rooms
+    database = await get_database()
+    return database.rooms
 
-def get_room_messages_collection():
+async def get_room_messages_collection():
     """Obtiene la colección de mensajes de sala."""
-    return get_database().room_messages
+    database = await get_database()
+    return database.room_messages
 
-def get_room_participants_collection():
+async def get_room_participants_collection():
     """Obtiene la colección de participantes de sala."""
-    return get_database().room_participants
+    database = await get_database()
+    return database.room_participants
 
-def get_room_events_collection():
+async def get_room_events_collection():
     """Obtiene la colección de eventos de sala."""
-    return get_database().room_events
+    database = await get_database()
+    return database.room_events
 
-def get_room_files_collection():
+async def get_room_files_collection():
     """Obtiene la colección de archivos de sala."""
-    return get_database().room_files
+    database = await get_database()
+    return database.room_files
 
-def get_room_notifications_collection():
+async def get_room_notifications_collection():
     """Obtiene la colección de notificaciones de sala."""
-    return get_database().room_notifications
+    database = await get_database()
+    return database.room_notifications
 
-def get_room_tasks_collection():
+async def get_room_tasks_collection():
     """Obtiene la colección de tareas de sala."""
-    return get_database().room_tasks
+    database = await get_database()
+    return database.room_tasks
 
-def get_room_events_history_collection():
+async def get_conversations_collection():
+    """Obtiene la colección de conversaciones."""
+    database = await get_database()
+    return database.conversations
+
+async def get_room_events_history_collection():
     """Obtiene la colección de historial de eventos de sala."""
-    return get_database().room_events_history
+    database = await get_database()
+    return database.room_events_history
 
-def get_room_messages_history_collection():
+async def get_room_messages_history_collection():
     """Obtiene la colección de historial de mensajes de sala."""
-    return get_database().room_messages_history
+    database = await get_database()
+    return database.room_messages_history
 
-def get_room_files_history_collection():
+async def get_room_files_history_collection():
     """Obtiene la colección de historial de archivos de sala."""
-    return get_database().room_files_history
+    database = await get_database()
+    return database.room_files_history
 
-def get_room_notifications_history_collection():
+async def get_room_notifications_history_collection():
     """Obtiene la colección de historial de notificaciones de sala."""
-    return get_database().room_notifications_history
+    database = await get_database()
+    return database.room_notifications_history
 
-def get_room_tasks_history_collection():
+async def get_room_tasks_history_collection():
     """Obtiene la colección de historial de tareas de sala."""
-    return get_database().room_tasks_history
+    database = await get_database()
+    return database.room_tasks_history
 
-def get_room_participants_history_collection():
+async def get_room_participants_history_collection():
     """Obtiene la colección de historial de participantes de sala."""
-    return get_database().room_participants_history
+    database = await get_database()
+    return database.room_participants_history
 
 def get_room_events_history_by_type_collection():
     """Obtiene la colección de historial de eventos de sala por tipo."""
@@ -299,27 +322,27 @@ def get_room_participants_history_by_type_and_user_and_date_collection():
     """Obtiene la colección de historial de participantes de sala por tipo, usuario y fecha."""
     return get_database().room_participants_history_by_type_and_user_and_date
 
-def get_itineraries_collection():
+async def get_itineraries_collection():
     """Obtiene la colección de itinerarios."""
-    return get_database().itineraries
+    database = await get_database()
+    return database.itineraries
 
-def get_itinerary_items_collection():
+async def get_itinerary_items_collection():
     """Obtiene la colección de items de itinerario."""
-    return get_database().itinerary_items
+    database = await get_database()
+    return database.itinerary_items
 
 async def get_visits_collection():
     """Obtiene la colección de visitas."""
     database = await get_database()
     return database.visits
 
-def get_places_collection():
+async def get_places_collection():
     """Obtiene la colección de lugares."""
-    return get_database().places
+    database = await get_database()
+    return database.places
 
-def get_flights_collection():
+async def get_flights_collection():
     """Obtiene la colección de vuelos."""
-    return get_database().flights
-
-def get_conversations_collection():
-    """Obtiene la colección de conversaciones."""
-    return get_database().conversations 
+    database = await get_database()
+    return database.flights 

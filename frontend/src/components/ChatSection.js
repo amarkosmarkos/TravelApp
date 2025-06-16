@@ -1,97 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, TextField, Button, Typography, Paper, CircularProgress } from '@mui/material';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Box, TextField, Button, Paper, Typography, CircularProgress } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 
-const ChatSection = ({ onTravelResponse, travelId }) => {
-    const [message, setMessage] = useState('');
-    const [chatHistory, setChatHistory] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
+const ChatSection = ({ travelId }) => {
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const [connected, setConnected] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [wsConnected, setWsConnected] = useState(false);
-    const messagesEndRef = useRef(null);
     const wsRef = useRef(null);
-
-    // Inicializar WebSocket
-    useEffect(() => {
-        if (!travelId) return;
-
-        const ws = new WebSocket(`ws://localhost:8000/ws/${travelId}`);
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-            console.log('WebSocket connected');
-            setWsConnected(true);
-        };
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'message') {
-                    setChatHistory(prev => [...prev, {
-                        role: 'assistant',
-                        content: data.data.message
-                    }]);
-                }
-            } catch (err) {
-                console.error('Error processing WebSocket message:', err);
-            }
-        };
-
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-            setError('Error de conexión con el servidor');
-            setWsConnected(false);
-        };
-
-        ws.onclose = () => {
-            console.log('WebSocket disconnected');
-            setWsConnected(false);
-        };
-
-        return () => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.close();
-            }
-        };
-    }, [travelId]);
-
-    // Cargar mensajes del viaje cuando cambia el travelId
-    useEffect(() => {
-        const loadChatHistory = async () => {
-            if (!travelId) {
-                setChatHistory([]);
-                return;
-            }
-
-            try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    throw new Error('No se encontró el token de autenticación');
-                }
-
-                const response = await fetch(`http://localhost:8000/travels/${travelId}/messages`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Error al cargar los mensajes');
-                }
-
-                const messages = await response.json();
-                setChatHistory(messages.map(msg => ({
-                    role: msg.is_user ? 'user' : 'assistant',
-                    content: msg.message
-                })));
-            } catch (err) {
-                console.error('Error al cargar el historial:', err);
-                setError(err.message);
-            }
-        };
-
-        loadChatHistory();
-    }, [travelId]);
+    const messagesEndRef = useRef(null);
+    const reconnectTimeoutRef = useRef(null);
+    const reconnectAttemptsRef = useRef(0);
+    const currentTravelIdRef = useRef(travelId);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -99,186 +20,308 @@ const ChatSection = ({ onTravelResponse, travelId }) => {
 
     useEffect(() => {
         scrollToBottom();
-    }, [chatHistory]);
+    }, [messages]);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!message.trim() || !travelId) return;
+    // Efecto para manejar el cambio de viaje
+    useEffect(() => {
+        if (travelId !== currentTravelIdRef.current) {
+            console.log(`Cambiando de viaje: ${currentTravelIdRef.current} -> ${travelId}`);
+            // Limpiar mensajes actuales
+            setMessages([]);
+            setLoading(true);
+            // Actualizar la referencia del viaje actual
+            currentTravelIdRef.current = travelId;
+            // Cerrar conexión WebSocket existente
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+            // Cargar mensajes del nuevo viaje
+            loadChatHistory();
+            // Conectar WebSocket para el nuevo viaje
+            connectWebSocket();
+        }
+    }, [travelId]);
 
-        setIsLoading(true);
-        setError(null);
+    const connectWebSocket = useCallback(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setError('No authentication token found');
+            return;
+        }
+
+        // Limpiar timeout de reconexión anterior
+        if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+        }
+
+        try {
+            const ws = new WebSocket(`ws://localhost:8000/api/travels/${travelId}/ws?token=${encodeURIComponent(token)}`);
+            wsRef.current = ws;
+
+            ws.onopen = () => {
+                console.log(`WebSocket connected for travel ${travelId}`);
+                setConnected(true);
+                setError(null);
+                reconnectAttemptsRef.current = 0;
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Raw WebSocket message:', event.data);
+                    console.log('Parsed WebSocket message:', data);
+
+                    if (data.type === 'message') {
+                        const message = data.data;
+                        console.log('Message data:', message);
+                        
+                        // Verificar que el mensaje pertenece al viaje actual
+                        if (message.travel_id === travelId) {
+                            // Actualizar el mensaje del usuario con el ID real del backend
+                            if (message.is_user) {
+                                setMessages(prevMessages => {
+                                    const updatedMessages = prevMessages.map(m => {
+                                        if (m.id.startsWith('temp-') && m.content === message.content) {
+                                            return { ...m, id: message.id };
+                                        }
+                                        return m;
+                                    });
+                                    return updatedMessages;
+                                });
+                            } else {
+                                // Agregar mensaje del asistente
+                                const assistantMessage = {
+                                    id: message.id,
+                                    content: message.content,
+                                    is_user: false,
+                                    timestamp: message.timestamp || new Date().toISOString(),
+                                    user_id: 'assistant',
+                                    travel_id: travelId
+                                };
+                                setMessages(prevMessages => [...prevMessages, assistantMessage]);
+                            }
+                            scrollToBottom();
+                        } else {
+                            console.warn('Received message for different travel:', message.travel_id);
+                        }
+                    } else if (data.type === 'error') {
+                        console.error('Error from server:', data.data);
+                        setError(data.data.message || 'Error processing message');
+                    }
+                } catch (error) {
+                    console.error('Error handling WebSocket message:', error);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                setError('Error connecting to chat server');
+                setConnected(false);
+            };
+
+            ws.onclose = (event) => {
+                console.log('WebSocket disconnected:', event.code);
+                setConnected(false);
+
+                // Solo intentar reconectar si estamos en el mismo viaje
+                if (travelId === currentTravelIdRef.current) {
+                    const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+                    reconnectAttemptsRef.current += 1;
+
+                    if (event.code === 4001) {
+                        setError('Authentication required');
+                    } else if (event.code === 4002) {
+                        setError('Invalid authentication token');
+                    } else if (event.code === 4004) {
+                        setError('Not authorized to access this travel');
+                    } else if (reconnectAttemptsRef.current < 5) {
+                        reconnectTimeoutRef.current = setTimeout(() => {
+                            connectWebSocket();
+                        }, backoffTime);
+                    } else {
+                        setError('Failed to connect to chat server after multiple attempts');
+                    }
+                }
+            };
+        } catch (error) {
+            console.error('Error creating WebSocket:', error);
+            setError('Failed to create WebSocket connection');
+            setConnected(false);
+        }
+
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
+        };
+    }, [travelId]);
+
+    const loadChatHistory = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                throw new Error('No authentication token found');
+            }
+
+            const response = await fetch(`http://localhost:8000/api/travels/${travelId}/chat`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load chat history');
+            }
+
+            const data = await response.json();
+            console.log(`Loaded ${data.length} messages for travel ${travelId}`);
+            setMessages(data);
+            setLoading(false);
+        } catch (error) {
+            console.error('Error in loadChatHistory:', error);
+            setError(error.message);
+            setLoading(false);
+        }
+    };
+
+    const sendMessage = async () => {
+        if (!newMessage.trim() || !connected) return;
 
         try {
             const token = localStorage.getItem('token');
             if (!token) {
-                throw new Error('No se encontró el token de autenticación');
+                throw new Error('No authentication token found');
             }
 
-            // Guardar el mensaje del usuario
-            const userMessageResponse = await fetch(`http://localhost:8000/travels/${travelId}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    message: message.trim(),
+            // Crear el mensaje del usuario con timestamp en formato ISO
+            const userMessage = {
+                id: `temp-${Date.now()}`,
+                content: newMessage,
+                is_user: true,
+                timestamp: new Date().toISOString(),
+                user_id: localStorage.getItem('userId'),
+                travel_id: travelId
+            };
+
+            // Agregar el mensaje al estado local inmediatamente
+            setMessages(prevMessages => [...prevMessages, userMessage]);
+            setNewMessage('');
+
+            const message = {
+                type: "message",
+                data: {
+                    message: newMessage,
                     is_user: true,
                     travel_id: travelId
-                })
-            });
-
-            if (!userMessageResponse.ok) {
-                throw new Error('Error al guardar el mensaje');
-            }
-
-            // Agregar mensaje del usuario al historial
-            setChatHistory(prev => [...prev, { role: 'user', content: message.trim() }]);
+                }
+            };
 
             // Enviar mensaje a través de WebSocket
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
-                    type: 'message',
-                    message: message.trim(),
-                    travel_id: travelId
-                }));
+                wsRef.current.send(JSON.stringify(message));
+            } else {
+                throw new Error('WebSocket connection is not open');
             }
-
-            setMessage('');
-        } catch (err) {
-            console.error('Error en el chat:', err);
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
+        } catch (error) {
+            console.error('Error sending message:', error);
+            setError(error.message);
         }
     };
 
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    };
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
     return (
-        <Box sx={{ 
-            height: '100%', 
-            display: 'flex', 
-            flexDirection: 'column',
-            gap: 2,
-            minHeight: 0
-        }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Paper 
                 elevation={3} 
                 sx={{ 
-                    flex: 1,
-                    p: 2,
-                    overflow: 'hidden',
-                    backgroundColor: '#f5f5f5',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: 0,
-                    maxHeight: 'calc(100vh - 200px)'
+                    flex: 1, 
+                    p: 2, 
+                    mb: 2, 
+                    overflow: 'auto',
+                    backgroundColor: '#f5f5f5'
                 }}
             >
-                <Box sx={{ 
-                    flex: 1, 
-                    overflow: 'auto',
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    mb: 2
-                }}>
-                    {!travelId && (
-                        <Typography variant="body1" sx={{ textAlign: 'center', color: 'text.secondary', my: 2 }}>
-                            Selecciona un viaje para comenzar a chatear
-                        </Typography>
-                    )}
-                    {!wsConnected && travelId && (
-                        <Typography variant="body2" color="error" sx={{ textAlign: 'center', my: 1 }}>
-                            Reconectando al servidor...
-                        </Typography>
-                    )}
-                    {chatHistory.map((msg, index) => (
-                        <Box
-                            key={index}
-                            sx={{
-                                display: 'flex',
-                                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                mb: 2
-                            }}
-                        >
-                            <Paper
-                                elevation={1}
-                                sx={{
-                                    p: 2,
-                                    maxWidth: '70%',
-                                    backgroundColor: msg.role === 'user' ? '#e3f2fd' : '#ffffff'
-                                }}
-                            >
-                                <Typography variant="body1">
-                                    {msg.content}
-                                </Typography>
-                            </Paper>
-                        </Box>
-                    ))}
-                    {error && (
-                        <Typography color="error" sx={{ mt: 2 }}>
-                            {error}
-                        </Typography>
-                    )}
-                    <div ref={messagesEndRef} />
-                </Box>
+                {error && (
+                    <Typography color="error" sx={{ mb: 2 }}>
+                        {error}
+                    </Typography>
+                )}
                 
-                <Box 
-                    component="form" 
-                    onSubmit={handleSubmit}
-                    sx={{ 
-                        display: 'flex',
-                        position: 'relative',
-                        backgroundColor: '#ffffff',
-                        borderRadius: 1,
-                        border: '1px solid rgba(0, 0, 0, 0.12)',
-                        '&:hover': {
-                            border: '1px solid rgba(0, 0, 0, 0.24)'
-                        }
-                    }}
-                >
-                    <TextField
-                        fullWidth
-                        variant="standard"
-                        placeholder={travelId ? "Escribe tu mensaje..." : "Selecciona un viaje para chatear"}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        disabled={isLoading || !travelId || !wsConnected}
-                        sx={{ 
-                            backgroundColor: '#ffffff',
-                            '& .MuiInputBase-root': {
-                                padding: '8px 12px'
-                            },
-                            '& .MuiInputBase-input': {
-                                paddingRight: '48px'
-                            }
-                        }}
-                    />
-                    <Button
-                        type="submit"
-                        variant="contained"
-                        color="primary"
-                        disabled={isLoading || !message.trim() || !travelId || !wsConnected}
-                        sx={{ 
-                            position: 'absolute',
-                            right: 4,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            minWidth: '40px',
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
-                            p: 0
+                {messages.map((message, index) => (
+                    <Box
+                        key={index}
+                        sx={{
+                            display: 'flex',
+                            justifyContent: message.is_user ? 'flex-end' : 'flex-start',
+                            mb: 2
                         }}
                     >
-                        {isLoading ? (
-                            <CircularProgress size={24} color="inherit" />
-                        ) : (
-                            <SendIcon />
-                        )}
-                    </Button>
-                </Box>
+                        <Paper
+                            elevation={1}
+                            sx={{
+                                p: 2,
+                                maxWidth: '70%',
+                                backgroundColor: message.is_user ? '#e3f2fd' : '#ffffff'
+                            }}
+                        >
+                            <Typography variant="body1">
+                                {message.content}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {message.timestamp ? new Date(message.timestamp).toLocaleString('es-ES', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour12: false
+                                }) : 'Just now'}
+                            </Typography>
+                        </Paper>
+                    </Box>
+                ))}
+                <div ref={messagesEndRef} />
             </Paper>
+
+            <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField
+                    fullWidth
+                    multiline
+                    maxRows={4}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Type your message..."
+                    disabled={!connected}
+                    sx={{ backgroundColor: '#ffffff' }}
+                />
+                <Button
+                    variant="contained"
+                    color="primary"
+                    endIcon={<SendIcon />}
+                    onClick={sendMessage}
+                    disabled={!connected || !newMessage.trim()}
+                >
+                    Send
+                </Button>
+            </Box>
         </Box>
     );
 };

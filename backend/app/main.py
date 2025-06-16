@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.routers import auth, travel
+from app.routers import auth, travel, users
 from app.middleware.security import security_middleware, login_attempt_middleware
 from app.config import settings
 from app.database import connect_to_mongodb, close_mongodb_connection
@@ -29,10 +29,11 @@ app = FastAPI(
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["http://localhost:3000"],  # Frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Agregar middlewares de seguridad
@@ -40,29 +41,9 @@ app.middleware("http")(security_middleware)
 app.middleware("http")(login_attempt_middleware)
 
 # Incluir los routers
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(travel.router, prefix="/travels", tags=["travels"])
-
-# WebSocket connections
-active_connections: dict = {}
-
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    await websocket.accept()
-    active_connections[client_id] = websocket
-    try:
-        while True:
-            data = await websocket.receive_text()
-            try:
-                message = json.loads(data)
-                await websocket.send_text(json.dumps({
-                    "type": "message",
-                    "data": message
-                }))
-            except json.JSONDecodeError:
-                logger.error(f"Error decoding message from client {client_id}")
-    except WebSocketDisconnect:
-        del active_connections[client_id]
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(travel.router, prefix="/api/travels", tags=["travels"])  # Todo bajo /api/travels
+app.include_router(users.router, prefix="/api/users", tags=["users"])
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):

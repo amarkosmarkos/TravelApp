@@ -1,10 +1,44 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, List, ListItem, ListItemIcon, ListItemText, ListItemSecondaryAction } from '@mui/material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import PeopleIcon from '@mui/icons-material/People';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 
-const ItinerarySection = ({ cities }) => {
+const ItinerarySection = ({ cities, travelId }) => {
+    const [itineraryItems, setItineraryItems] = useState([]);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const fetchItineraryItems = async () => {
+            if (!travelId) return;
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    throw new Error('No authentication token found');
+                }
+
+                const response = await fetch(`http://localhost:8000/api/travels/${travelId}/itinerary`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load itinerary items');
+                }
+
+                const data = await response.json();
+                setItineraryItems(data);
+            } catch (error) {
+                console.error('Error fetching itinerary items:', error);
+                setError(error.message);
+            }
+        };
+
+        fetchItineraryItems();
+    }, [travelId]);
+
     const formatPopulation = (population) => {
         if (!population) return 'N/A';
         return new Intl.NumberFormat('es-ES').format(population);
@@ -14,6 +48,14 @@ const ItinerarySection = ({ cities }) => {
         if (!coordinates) return 'N/A';
         return `${coordinates.latitude.toFixed(4)}, ${coordinates.longitude.toFixed(4)}`;
     };
+
+    if (error) {
+        return (
+            <Box sx={{ p: 3 }}>
+                <Typography color="error">{error}</Typography>
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

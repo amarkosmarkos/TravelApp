@@ -10,13 +10,17 @@ from ..database import (
     get_visits_collection,
     get_places_collection,
     get_flights_collection,
-    get_messages_collection
+    get_messages_collection,
+    get_conversations_collection
 )
 from ..models.travel import TravelCreate, Travel, ChatCreate, Chat, ChatMessageCreate, ChatMessage, ItineraryCreate, Itinerary, ItineraryItemCreate, ItineraryItem, VisitCreate, Visit, PlaceCreate, Place, FlightCreate, Flight, TravelUpdate, Message, MessageCreate
 from motor.motor_asyncio import AsyncIOMotorDatabase
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def get_travel(db: AsyncIOMotorDatabase, travel_id: str) -> Optional[Travel]:
-    travels = get_travels_collection()
+    travels = await get_travels_collection()
     travel = await travels.find_one({"_id": ObjectId(travel_id)})
     if travel:
         return Travel(**travel)
@@ -38,33 +42,43 @@ async def create_travel(
     travel: TravelCreate,
     user_id: str
 ) -> Travel:
-    travels = get_travels_collection()
-    travel_dict = travel.dict()
-    travel_dict["user_id"] = user_id
-    travel_dict["created_at"] = datetime.utcnow()
-    travel_dict["updated_at"] = datetime.utcnow()
-    travel_dict["messages"] = []
-    
-    result = await travels.insert_one(travel_dict)
-    created_travel = await travels.find_one({"_id": result.inserted_id})
-    
-    # Crear elementos asociados
-    chat = ChatCreate(travel_id=str(result.inserted_id))
-    await create_chat(chat)
-    
-    itinerary = ItineraryCreate(travel_id=str(result.inserted_id))
-    await create_itinerary(itinerary)
-    
-    visit = VisitCreate(travel_id=str(result.inserted_id))
-    await create_visit(visit)
-    
-    place = PlaceCreate(travel_id=str(result.inserted_id))
-    await create_place(place)
-    
-    flight = FlightCreate(travel_id=str(result.inserted_id))
-    await create_flight(flight)
-    
-    return Travel(**created_travel)
+    try:
+        # Crear el viaje
+        travels = await get_travels_collection()
+        travel_dict = travel.dict()
+        travel_dict["user_id"] = user_id
+        travel_dict["created_at"] = datetime.utcnow()
+        travel_dict["updated_at"] = datetime.utcnow()
+        
+        result = await travels.insert_one(travel_dict)
+        created_travel = await travels.find_one({"_id": result.inserted_id})
+        
+        # Crear la conversación inicial
+        conversations = await get_chats_collection()
+        conversation = {
+            "travel_id": str(result.inserted_id),
+            "user_id": user_id,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        conversation_result = await conversations.insert_one(conversation)
+        
+        # Crear mensaje de bienvenida
+        messages = await get_messages_collection()
+        welcome_message = {
+            "message": "¡Bienvenido a tu nuevo viaje! ¿A dónde te gustaría ir?",
+            "is_user": False,
+            "travel_id": str(result.inserted_id),
+            "conversation_id": str(conversation_result.inserted_id),
+            "user_id": user_id,
+            "timestamp": datetime.utcnow()
+        }
+        await messages.insert_one(welcome_message)
+        
+        return Travel(**created_travel)
+    except Exception as e:
+        logger.error(f"Error creating travel: {str(e)}")
+        raise
 
 async def update_travel(
     db: AsyncIOMotorDatabase,
@@ -193,17 +207,42 @@ async def get_travel_messages(
     db: AsyncIOMotorDatabase,
     travel_id: str
 ) -> List[Message]:
-    messages = get_messages_collection()
-    cursor = messages.find({"travel_id": travel_id}).sort("created_at", 1)
+    # Primero obtener la conversación asociada al viaje
+    conversations = await get_conversations_collection()
+    conversation = await conversations.find_one({"travel_id": travel_id})
+    
+    if not conversation:
+        # Si no existe conversación, crearla
+        conversation = {
+            "travel_id": travel_id,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        result = await conversations.insert_one(conversation)
+        conversation["_id"] = result.inserted_id
+    
+    # Obtener los mensajes de la conversación
+    messages = await get_messages_collection()
+    cursor = messages.find({
+        "travel_id": travel_id,
+        "conversation_id": str(conversation["_id"])
+    }).sort("timestamp", 1)
+    
     messages_list = await cursor.to_list(length=None)
-    return [Message(**message) for message in messages_list]
+    return [Message(
+        travel_id=msg["travel_id"],
+        conversation_id=str(conversation["_id"]),
+        message=msg["message"],
+        is_user=msg["is_user"],
+        timestamp=msg["timestamp"]
+    ) for msg in messages_list]
 
 async def create_travel_message(
     db: AsyncIOMotorDatabase,
     travel_id: str,
     message: MessageCreate
 ) -> Message:
-    messages = get_messages_collection()
+    messages = await get_messages_collection()
     message_dict = message.dict()
     message_dict["created_at"] = datetime.utcnow()
     

@@ -6,15 +6,27 @@ from bson import ObjectId
 from .base import PyObjectId, MongoBaseModel
 
 class MessageBase(BaseModel):
-    message: str
+    content: str
     is_user: bool = True
     travel_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class MessageCreate(MessageBase):
     pass
 
-class Message(MessageBase, MongoBaseModel):
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+class Message(MessageBase):
+    id: Optional[PyObjectId] = Field(None, alias="_id")
+    user_id: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda dt: dt.isoformat()
+        }
 
 class TravelBase(BaseModel):
     title: str
@@ -23,7 +35,7 @@ class TravelBase(BaseModel):
     end_date: Optional[datetime] = None
     destination: str
     budget: Optional[float] = None
-    status: str = "planned"
+    status: str = "active"
 
 class TravelCreate(TravelBase):
     pass
@@ -32,22 +44,40 @@ class TravelUpdate(TravelBase):
     title: Optional[str] = None
     destination: Optional[str] = None
 
-class Travel(TravelBase, MongoBaseModel):
+class Travel(TravelBase):
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     user_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     messages: List[Message] = []
 
+    class Config:
+        allow_population_by_field_name = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda dt: dt.isoformat()
+        }
+
 class ChatBase(BaseModel):
-    pass
+    travel_id: str
+    title: Optional[str] = None
 
 class ChatCreate(ChatBase):
-    travel_id: str
+    pass
 
-class Chat(ChatBase, MongoBaseModel):
-    travel_id: str
+class Chat(ChatBase):
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    user_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda dt: dt.isoformat()
+        }
 
 class ChatMessageBase(BaseModel):
     content: str

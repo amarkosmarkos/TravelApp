@@ -31,7 +31,7 @@ const LoginPage = () => {
 
       // Realizar la petición de login
       const response = await axios.post(
-        `${API_URL}/auth/token`,
+        `${API_URL}/api/auth/token`,
         loginData.toString(),
         {
           headers: {
@@ -57,7 +57,7 @@ const LoginPage = () => {
         
         // Verificar que el token es válido haciendo una petición de prueba
         try {
-          const testResponse = await axios.get(`${API_URL}/auth/me`, {
+          const testResponse = await axios.get(`${API_URL}/api/auth/me`, {
             headers: {
               'Authorization': `Bearer ${savedToken}`
             }
