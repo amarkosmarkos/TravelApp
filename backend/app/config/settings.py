@@ -1,4 +1,4 @@
-# config.py
+# settings.py
 from pydantic_settings import BaseSettings
 from openai import AzureOpenAI
 import os
@@ -91,28 +91,16 @@ if not all(required_auth):
     ] if not value]
     raise RuntimeError(f"Missing required authentication settings: {', '.join(missing)}")
 
-class ChatModel:
-    def __init__(self):
-        # Validate Azure settings only when initializing ChatModel
-        required_azure = [
-            settings.AZURE_OPENAI_API_KEY,
-            settings.AZURE_OPENAI_ENDPOINT,
-            settings.AZURE_OPENAI_DEPLOYMENT_NAME
-        ]
-        if not all(required_azure):
-            missing = [name for name, value in [
-                ("AZURE_OPENAI_API_KEY", settings.AZURE_OPENAI_API_KEY),
-                ("AZURE_OPENAI_ENDPOINT", settings.AZURE_OPENAI_ENDPOINT),
-                ("AZURE_OPENAI_DEPLOYMENT_NAME", settings.AZURE_OPENAI_DEPLOYMENT_NAME)
-            ] if not value]
-            raise RuntimeError(f"Missing required Azure settings: {', '.join(missing)}")
-
-        # Initialize Azure OpenAI client
-        self.client = AzureOpenAI(
-            api_key=settings.AZURE_OPENAI_API_KEY,
-            api_version=settings.AZURE_OPENAI_API_VERSION,
-            azure_endpoint=settings.AZURE_OPENAI_ENDPOINT.rstrip('/')
-        )
-        self.deployment_name = settings.AZURE_OPENAI_DEPLOYMENT_NAME
-        print(f"ChatModel initialized with deployment: {self.deployment_name}")
-
+# Validate Azure settings
+required_azure = [
+    settings.AZURE_OPENAI_API_KEY,
+    settings.AZURE_OPENAI_ENDPOINT,
+    settings.AZURE_OPENAI_DEPLOYMENT_NAME
+]
+if not all(required_azure):
+    missing = [name for name, value in [
+        ("AZURE_OPENAI_API_KEY", settings.AZURE_OPENAI_API_KEY),
+        ("AZURE_OPENAI_ENDPOINT", settings.AZURE_OPENAI_ENDPOINT),
+        ("AZURE_OPENAI_DEPLOYMENT_NAME", settings.AZURE_OPENAI_DEPLOYMENT_NAME)
+    ] if not value]
+    raise RuntimeError(f"Missing required Azure settings: {', '.join(missing)}") 

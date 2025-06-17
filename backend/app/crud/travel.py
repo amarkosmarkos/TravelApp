@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from bson import ObjectId
 from ..database import (
     get_travels_collection,
@@ -13,7 +13,7 @@ from ..database import (
     get_messages_collection,
     get_conversations_collection
 )
-from ..models.travel import TravelCreate, Travel, ChatCreate, Chat, ChatMessageCreate, ChatMessage, ItineraryCreate, Itinerary, ItineraryItemCreate, ItineraryItem, VisitCreate, Visit, PlaceCreate, Place, FlightCreate, Flight, TravelUpdate, Message, MessageCreate
+from ..models.travel import TravelCreate, Travel, ChatCreate, Chat, ChatMessageCreate, ChatMessage, ItineraryCreate, Itinerary, VisitCreate, Visit, PlaceCreate, Place, FlightCreate, Flight, TravelUpdate, Message, MessageCreate
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import logging
 
@@ -130,20 +130,20 @@ async def create_chat(chat: ChatCreate) -> Chat:
     return Chat(**created_chat)
 
 # Itinerary operations
-async def get_itinerary_items(itinerary_id: str, skip: int = 0, limit: int = 100) -> List[ItineraryItem]:
+async def get_itinerary_items(itinerary_id: str, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
     itinerary_items = get_itinerary_items_collection()
     cursor = itinerary_items.find({"itinerary_id": itinerary_id}).skip(skip).limit(limit)
-    return [ItineraryItem(**item) async for item in cursor]
+    return [dict(item) async for item in cursor]
 
-async def create_itinerary_item(item: ItineraryItemCreate) -> ItineraryItem:
+async def create_itinerary_item(item: Dict[str, Any]) -> Dict[str, Any]:
     itinerary_items = get_itinerary_items_collection()
-    item_dict = item.dict()
+    item_dict = item.copy()
     item_dict["created_at"] = datetime.utcnow()
     item_dict["updated_at"] = datetime.utcnow()
     
     result = await itinerary_items.insert_one(item_dict)
     created_item = await itinerary_items.find_one({"_id": result.inserted_id})
-    return ItineraryItem(**created_item)
+    return dict(created_item)
 
 async def create_itinerary(itinerary: ItineraryCreate) -> Itinerary:
     itineraries = get_itineraries_collection()

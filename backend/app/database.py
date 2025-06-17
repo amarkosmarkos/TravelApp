@@ -345,4 +345,11 @@ async def get_places_collection():
 async def get_flights_collection():
     """Obtiene la colección de vuelos."""
     database = await get_database()
-    return database.flights 
+    return database.flights
+
+async def get_cities_collection():
+    """
+    Obtiene la colección de ciudades de la base de datos.
+    """
+    db = await get_database()
+    return db.cities 

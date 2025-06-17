@@ -4,9 +4,11 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.database import (
     get_database,
     get_chats_collection,
-    get_messages_collection
+    get_messages_collection,
+    get_itineraries_collection,
+    get_cities_collection
 )
-from app.models.travel import Message, MessageCreate, Chat, ChatCreate
+from app.models.travel import Message, MessageCreate, Chat, ChatCreate, ItineraryCreate
 from app.crud import travel as travel_crud
 from app.travel_assistant import travel_assistant
 import logging
@@ -110,10 +112,25 @@ class ChatService:
             saved_user_message = await self.create_message(db, travel_id, user_id, user_message)
             logger.info(f"Mensaje del usuario guardado: {saved_user_message.id}")
 
+            # Obtener historial de mensajes para este viaje
+            messages = await get_messages_collection()
+            travel_messages = await messages.find(
+                {
+                    "travel_id": travel_id,
+                    "user_id": {"$in": [user_id, "assistant"]}
+                }
+            ).sort("timestamp", 1).limit(20).to_list(length=None)
+            
+            logger.info(f"Historial de mensajes obtenido para travel_id={travel_id}: {len(travel_messages)} mensajes")
+
             # Procesar con el asistente
             try:
                 logger.info("Enviando mensaje al asistente")
-                response = await self.assistant.process_message(message, user_id)
+                response = await self.assistant.process_message(
+                    message=message,
+                    user_id=user_id,
+                    message_history=travel_messages
+                )
                 logger.info(f"Respuesta del asistente recibida: {response}")
                 
                 if not response or "message" not in response:
@@ -121,6 +138,49 @@ class ChatService:
                     assistant_response = "Lo siento, no pude procesar tu mensaje correctamente."
                 else:
                     assistant_response = response["message"]
+
+                    # Si la respuesta incluye un itinerario, crear los registros en la base de datos
+                    if "cities" in response and response.get("intention") == "reformulate_itinerary":
+                        try:
+                            # Obtener la colección de ciudades
+                            cities_collection = await get_cities_collection()
+                            itinerary_cities = []
+
+                            # Para cada ciudad en la respuesta del LLM
+                            for city_data in response["cities"]:
+                                # Buscar la ciudad en nuestra base de datos
+                                city = await cities_collection.find_one({"name": city_data["name"]})
+                                if city:
+                                    itinerary_cities.append({
+                                        "name": city["name"],
+                                        "start_date": None,
+                                        "end_date": None,
+                                        "coordinates": {
+                                            "latitude": city["latitude"],
+                                            "longitude": city["longitude"]
+                                        }
+                                    })
+                                    logger.info(f"Ciudad encontrada en la base de datos: {city_data['name']}")
+                                else:
+                                    logger.warning(f"Ciudad no encontrada en la base de datos: {city_data['name']}")
+
+                            if itinerary_cities:
+                                # Crear el itinerario con las ciudades verificadas
+                                itinerary = ItineraryCreate(
+                                    travel_id=travel_id,
+                                    cities=itinerary_cities
+                                )
+                                
+                                itineraries = await get_itineraries_collection()
+                                await itineraries.insert_one(itinerary.dict())
+                                
+                                logger.info(f"Itinerario creado exitosamente para travel_id={travel_id} con {len(itinerary_cities)} ciudades")
+                            else:
+                                logger.warning("No se encontraron ciudades válidas para crear el itinerario")
+
+                        except Exception as e:
+                            logger.error(f"Error creando itinerario: {str(e)}", exc_info=True)
+
             except Exception as e:
                 logger.error(f"Error en el asistente: {str(e)}", exc_info=True)
                 assistant_response = "Lo siento, hubo un error al procesar tu mensaje."

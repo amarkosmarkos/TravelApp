@@ -18,8 +18,9 @@ from app.database import (
 )
 from ..models.travel import (
     Travel, TravelCreate, TravelUpdate,
+    Chat, ChatCreate,
     ChatMessage, ChatMessageCreate,
-    ItineraryItem, ItineraryItemCreate,
+    Itinerary, ItineraryCreate,
     Visit, VisitCreate,
     Place, PlaceCreate,
     Flight, FlightCreate,
@@ -336,29 +337,34 @@ async def process_chat_message(
         )
 
 # Itinerary Items
-@router.get("/{travel_id}/itinerary", response_model=List[ItineraryItem])
+@router.get("/{travel_id}/itinerary", response_model=List[Itinerary])
 async def read_itinerary_items(
     travel_id: str,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user)
 ):
-    travel = await get_travels_collection()
+    travels = await get_travels_collection()
+    travel = await travels.find_one({"_id": ObjectId(travel_id)})
+    
     if travel is None:
         raise HTTPException(status_code=404, detail="Travel not found")
     if travel["user_id"] != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized to access this itinerary")
     
-    cursor = itinerary_items.find({"travel_id": travel_id}).skip(skip).limit(limit)
-    return [ItineraryItem(**doc) async for doc in cursor]
+    itineraries = await get_itineraries_collection()
+    cursor = itineraries.find({"travel_id": travel_id}).skip(skip).limit(limit)
+    return [Itinerary(**doc) async for doc in cursor]
 
-@router.post("/{travel_id}/itinerary", response_model=ItineraryItem)
+@router.post("/{travel_id}/itinerary", response_model=Itinerary)
 async def create_itinerary_item(
     travel_id: str,
-    item: ItineraryItemCreate,
+    item: ItineraryCreate,
     current_user: User = Depends(get_current_active_user)
 ):
-    travel = await get_travels_collection()
+    travels = await get_travels_collection()
+    travel = await travels.find_one({"_id": ObjectId(travel_id)})
+    
     if travel is None:
         raise HTTPException(status_code=404, detail="Travel not found")
     if travel["user_id"] != str(current_user.id):
@@ -369,9 +375,10 @@ async def create_itinerary_item(
     item_dict["created_at"] = datetime.utcnow()
     item_dict["updated_at"] = datetime.utcnow()
     
-    result = await itinerary_items.insert_one(item_dict)
-    created_item = await itinerary_items.find_one({"_id": result.inserted_id})
-    return ItineraryItem(**created_item)
+    itineraries = await get_itineraries_collection()
+    result = await itineraries.insert_one(item_dict)
+    created_item = await itineraries.find_one({"_id": result.inserted_id})
+    return Itinerary(**created_item)
 
 # Visits
 @router.get("/{travel_id}/visits", response_model=List[Visit])

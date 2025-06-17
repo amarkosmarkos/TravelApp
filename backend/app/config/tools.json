@@ -1,0 +1,26 @@
+{
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "create_itinerary",
+                "description": "Crea un itinerario de viaje para las ciudades especificadas",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "cities": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Lista de ciudades para el itinerario"
+                        },
+                        "country_code": {
+                            "type": "string",
+                            "description": "Código de país ISO (ej: ES, FR, IT)"
+                        }
+                    },
+                    "required": ["cities", "country_code"]
+                }
+            }
+        }
+    ]
+} 

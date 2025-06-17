@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from openai import AzureOpenAI
 from app.config import settings
+from app.config import ASSISTANT_PERSONALITY, load_tools
 from app.services.city_service import city_service
 from app.models.conversation import Conversation, Message
 from app.database import (
@@ -20,13 +21,16 @@ import json
 import logging
 import sys
 from datetime import datetime
+from pathlib import Path
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Crear un handler para archivo
-log_filename = f"travel_assistant_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+log_dir = Path(__file__).parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
+log_filename = log_dir / f"travel_assistant_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 file_handler = logging.FileHandler(log_filename)
 file_handler.setLevel(logging.DEBUG)
 
@@ -52,80 +56,69 @@ class TravelAssistant:
             azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
         )
         self.deployment_name = settings.AZURE_OPENAI_DEPLOYMENT_NAME
-        self.system_message = """Eres un asistente de viajes de Voasis. Tu tarea es ayudar a los usuarios a planificar sus viajes.
+        
+        # Cargar herramientas y personalidad
+        self.tools = load_tools()
+        self.personality = ASSISTANT_PERSONALITY
 
-INSTRUCCIONES:
-1. Si el usuario menciona una ubicación (país, región o ciudad), usa la función create_itinerary.
-2. Para otros mensajes, responde de manera amigable y útil.
-3. Si el usuario saluda o hace preguntas generales, responde de forma natural.
+    def _load_tools(self) -> List[Dict]:
+        """Carga las herramientas desde el archivo JSON de configuración."""
+        try:
+            tools_path = Path(__file__).parent / "config" / "tools.json"
+            with open(tools_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config.get("tools", [])
+        except Exception as e:
+            logger.error(f"Error loading tools configuration: {str(e)}")
+            return []
 
-FORMATO:
-- Usa viñetas cuando proporciones información estructurada
-- Mantén las respuestas claras y concisas
-- Sé amigable y profesional
-"""
-        # Definir las funciones disponibles
-        self.tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "create_itinerary",
-                    "description": "Crea un itinerario de viaje para las ciudades especificadas",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "cities": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Lista de ciudades para el itinerario"
-                            },
-                            "country_code": {
-                                "type": "string",
-                                "description": "Código de país ISO (ej: ES, FR, IT)"
-                            }
-                        },
-                        "required": ["cities", "country_code"]
-                    }
-                }
-            }
-        ]
-
-    async def process_message(self, message: str, user_id: str) -> dict:
+    async def process_message(self, message: str, user_id: str, message_history: List[Dict] = None) -> dict:
         try:
             logger.info(f"Procesando mensaje del usuario {user_id}: {message}")
             
-            # Obtener el historial de mensajes
-            messages_collection = await get_messages_collection()
-            messages = await messages_collection.find(
-                {"user_id": user_id}
-            ).sort("timestamp", -1).limit(10).to_list(length=None)
-            
-            logger.info(f"Historial de mensajes obtenido: {len(messages)} mensajes")
-            
             # Preparar el historial de conversación
             conversation_history = [
-                {"role": "system", "content": self.system_message}
+                {"role": "system", "content": self.personality["system_prompt"]}
             ]
             
-            for msg in reversed(messages):
-                conversation_history.append({
-                    "role": "user" if msg["is_user"] else "assistant",
-                    "content": msg["content"]
-                })
+            # Si no se proporciona historial, obtenerlo de la base de datos
+            if message_history is None:
+                messages_collection = await get_messages_collection()
+                messages = await messages_collection.find(
+                    {"user_id": user_id}
+                ).sort("timestamp", 1).limit(20).to_list(length=None)
+                
+                logger.info(f"Historial de mensajes obtenido de la base de datos: {len(messages)} mensajes")
+                
+                # Añadir el historial en orden cronológico
+                for msg in messages:
+                    conversation_history.append({
+                        "role": "user" if msg["is_user"] else "assistant",
+                        "content": msg["content"]
+                    })
+            else:
+                # Usar el historial proporcionado
+                logger.info(f"Usando historial proporcionado: {len(message_history)} mensajes")
+                for msg in message_history:
+                    conversation_history.append({
+                        "role": "user" if msg["is_user"] else "assistant",
+                        "content": msg["content"]
+                    })
             
-            # Agregar el mensaje actual
+            # Añadir el mensaje actual
             conversation_history.append({
                 "role": "user",
                 "content": message
             })
             
             logger.info("Enviando mensaje a Azure OpenAI")
+            logger.debug(f"Historial de conversación: {json.dumps(conversation_history, indent=2)}")
             
             # Llamar al modelo con function calling
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=conversation_history,
-                functions=[self.tools[0]["function"]],
+                functions=[tool["function"] for tool in self.tools],
                 function_call="auto"
             )
 
@@ -140,18 +133,20 @@ FORMATO:
                 logger.info(f"Llamando a función {function_name} con args: {function_args}")
                 
                 if function_name == "create_itinerary":
-                    # Crear el itinerario
-                    await self.create_itinerary(**function_args)
+                    # Crear el itinerario y obtener la respuesta generada
+                    itinerary_response = await self.create_itinerary(**function_args)
                     return {
-                        "message": "He creado un itinerario detallado para tu viaje. Puedes verlo en la sección de itinerarios.",
-                        "is_user": False
+                        "message": itinerary_response["user_message"],
+                        "is_user": False,
+                        "intention": "reformulate_itinerary",
+                        "cities": itinerary_response["cities"]
                     }
             
             # Si no hay function call, devolver la respuesta normal
             if not response_message.content:
                 logger.error("Respuesta vacía de Azure OpenAI")
                 return {
-                    "message": "Lo siento, no pude generar una respuesta adecuada. Por favor, intenta reformular tu mensaje.",
+                    "message": "No he podido generar una respuesta adecuada. ¿Podrías reformular tu mensaje?",
                     "is_user": False
                 }
                 
@@ -163,7 +158,7 @@ FORMATO:
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}", exc_info=True)
             return {
-                "message": "Lo siento, ha ocurrido un error al procesar tu mensaje. Por favor, intenta de nuevo.",
+                "message": f"Lo siento, ha ocurrido un error al procesar tu mensaje: {str(e)}",
                 "is_user": False
             }
 
@@ -201,7 +196,9 @@ FORMATO:
             {json.dumps(city_details, indent=2, ensure_ascii=False)}
 
             Genera una respuesta que sea conversacional y atractiva, como si estuvieras 
-            contándole a un amigo sobre este viaje."""
+            contándole a un amigo sobre este viaje. Incluye sugerencias de actividades, 
+            lugares para visitar y consejos prácticos. Sé específico y detallado, pero 
+            mantén un tono amigable y entusiasta."""
 
             # Generate response using ChatGPT
             response = self.client.chat.completions.create(
@@ -217,7 +214,7 @@ FORMATO:
             return {
                 "intention": "reformulate_itinerary",
                 "cities": city_details,
-                "user_message": generated_message + "\n\n¿Te gustaría que ajustemos algo del itinerario?"
+                "user_message": generated_message
             }
         except Exception as e:
             logger.error(f"Error creating itinerary: {str(e)}", exc_info=True)
