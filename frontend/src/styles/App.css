@@ -7,10 +7,53 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #fafafa;
+  color: #605856;
 }
 
 #root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Mejoras generales para Material-UI */
+.MuiButton-root {
+  text-transform: none !important;
+  font-weight: 600 !important;
+}
+
+.MuiCard-root {
+  border-radius: 12px !important;
+}
+
+/* Efectos de hover suaves */
+* {
+  transition: all 0.3s ease;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #b9a394;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8a7a6d;
+}
+
+/* Mejoras para dispositivos móviles */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
 } 

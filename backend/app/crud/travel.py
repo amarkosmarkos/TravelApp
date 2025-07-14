@@ -145,15 +145,25 @@ async def create_itinerary_item(item: Dict[str, Any]) -> Dict[str, Any]:
     created_item = await itinerary_items.find_one({"_id": result.inserted_id})
     return dict(created_item)
 
-async def create_itinerary(itinerary: ItineraryCreate) -> Itinerary:
-    itineraries = get_itineraries_collection()
+async def create_or_update_itinerary(itinerary: ItineraryCreate) -> Itinerary:
+    """
+    Crea un itinerario si no existe para el travel_id, o lo actualiza si ya existe (relación 1:1).
+    """
+    itineraries = await get_itineraries_collection()
+    travel_id = str(itinerary.travel_id)
+    existing = await itineraries.find_one({"travel_id": travel_id})
     itinerary_dict = itinerary.dict()
-    itinerary_dict["created_at"] = datetime.utcnow()
+    itinerary_dict["travel_id"] = travel_id  # Asegura que se guarda como string
     itinerary_dict["updated_at"] = datetime.utcnow()
-    
-    result = await itineraries.insert_one(itinerary_dict)
-    created_itinerary = await itineraries.find_one({"_id": result.inserted_id})
-    return Itinerary(**created_itinerary)
+    if existing:
+        await itineraries.update_one({"_id": existing["_id"]}, {"$set": itinerary_dict})
+        updated = await itineraries.find_one({"_id": existing["_id"]})
+        return Itinerary(**updated)
+    else:
+        itinerary_dict["created_at"] = datetime.utcnow()
+        result = await itineraries.insert_one(itinerary_dict)
+        created = await itineraries.find_one({"_id": result.inserted_id})
+        return Itinerary(**created)
 
 # Visit operations
 async def get_visits(travel_id: str, skip: int = 0, limit: int = 100) -> List[Visit]:

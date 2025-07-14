@@ -91,7 +91,7 @@ class ChatMessage(ChatMessageBase, MongoBaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class ItineraryBase(BaseModel):
-    travel_id: str
+    travel_id: str  # Debe ser único: relación 1:1 con Travel
     cities: List[dict] = []  # Lista de ciudades con sus fechas
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

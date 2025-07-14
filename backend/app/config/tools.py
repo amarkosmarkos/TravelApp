@@ -1,41 +1,49 @@
 """
-Definición de las herramientas disponibles para el asistente de viajes.
+Definition of available tools for the travel assistant.
 """
 
 from typing import List, Dict, Any
 
 def load_tools() -> List[Dict[str, Any]]:
     """
-    Retorna la lista de herramientas disponibles para el asistente.
+    Returns the list of available tools for the assistant.
     """
     return [
         {
             "type": "function",
             "function": {
                 "name": "create_itinerary",
-                "description": """Crea o modifica un itinerario de viaje. Esta función DEBE ser usada en los siguientes casos:
-                1. Cuando el usuario solicita crear un nuevo itinerario
-                2. Cuando el usuario pide añadir o modificar ciudades en un itinerario existente
-                3. Cuando el usuario menciona un país o región para planificar un viaje
+                "description": """Creates or modifies a travel itinerary. This function MUST be used in the following cases:
+                1. When the user mentions a country (with or without cities)
+                2. When the user confirms they want to create an itinerary (says "yes", "ok", etc.)
+                3. When the user asks to add or modify cities in an existing itinerary
+                4. When the user mentions specific cities for a country
                 
-                IMPORTANTE: 
-                - Los nombres de las ciudades deben estar en inglés (ej: 'Tokyo' en lugar de 'Tokio')
-                - Si el usuario solo menciona un país, DEBES sugerir las ciudades más relevantes para un viaje en ese país
-                - NO preguntes al usuario por las ciudades, usa tu conocimiento para sugerir las más apropiadas""",
+                IMPORTANT: 
+                - If only country_name is provided, the function will automatically determine the country_code
+                - If no cities are provided, the function will suggest the most relevant cities for that country
+                - City names must be in English (e.g., 'Tokyo' instead of 'Tokio')
+                - The country_code must be the correct ISO code (e.g., 'TH' for Thailand)
+                - This function can handle both country names and country codes
+                - Take initiative and suggest cities if none are provided""",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "cities": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Lista de ciudades para el itinerario. Los nombres DEBEN estar en inglés (ej: 'Tokyo', 'London', 'Paris')."
+                            "description": "List of cities for the itinerary. Names MUST be in English (e.g., 'Tokyo', 'London', 'Paris'). Optional - if not provided, will suggest cities for the country."
                         },
                         "country_code": {
                             "type": "string",
-                            "description": "Código de país ISO (ej: JP para Japón, ES para España, FR para Francia)"
+                            "description": "ISO country code (e.g., TH for Thailand, JP for Japan, ES for Spain). Optional if country_name is provided."
+                        },
+                        "country_name": {
+                            "type": "string",
+                            "description": "Country name (e.g., 'Thailand', 'Japan', 'Spain'). Optional if country_code is provided."
                         }
                     },
-                    "required": ["cities", "country_code"]
+                    "required": []
                 }
             }
         }

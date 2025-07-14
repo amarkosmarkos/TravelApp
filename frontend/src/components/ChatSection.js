@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, TextField, Button, Paper, Typography, CircularProgress } from '@mui/material';
+import { Box, TextField, Button, Paper, Typography, CircularProgress, useTheme } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 
 const ChatSection = ({ travelId }) => {
@@ -13,6 +13,7 @@ const ChatSection = ({ travelId }) => {
     const reconnectTimeoutRef = useRef(null);
     const reconnectAttemptsRef = useRef(0);
     const currentTravelIdRef = useRef(travelId);
+    const theme = useTheme();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -22,39 +23,54 @@ const ChatSection = ({ travelId }) => {
         scrollToBottom();
     }, [messages]);
 
-    // Efecto para manejar el cambio de viaje
+    // Initialize chat when component mounts
     useEffect(() => {
-        if (travelId !== currentTravelIdRef.current) {
-            console.log(`Cambiando de viaje: ${currentTravelIdRef.current} -> ${travelId}`);
-            // Limpiar mensajes actuales
+        if (travelId) {
+            console.log('Initializing chat for travel:', travelId);
+            loadChatHistory();
+            connectWebSocket();
+        }
+    }, []); // Empty dependency array - only run once on mount
+
+    // Effect to handle travel change
+    useEffect(() => {
+        if (travelId && travelId !== currentTravelIdRef.current) {
+            console.log(`Changing travel: ${currentTravelIdRef.current} -> ${travelId}`);
+            // Clear current messages
             setMessages([]);
             setLoading(true);
-            // Actualizar la referencia del viaje actual
+            // Update current travel reference
             currentTravelIdRef.current = travelId;
-            // Cerrar conexión WebSocket existente
+            // Close existing WebSocket connection
             if (wsRef.current) {
                 wsRef.current.close();
             }
-            // Cargar mensajes del nuevo viaje
+            // Load messages for the new travel
             loadChatHistory();
-            // Conectar WebSocket para el nuevo viaje
+            // Connect WebSocket for the new travel
             connectWebSocket();
         }
     }, [travelId]);
 
     const connectWebSocket = useCallback(() => {
+        if (!travelId) {
+            console.log('No travelId provided, skipping WebSocket connection');
+            return;
+        }
+
         const token = localStorage.getItem('token');
         if (!token) {
             setError('No authentication token found');
             return;
         }
 
-        // Limpiar timeout de reconexión anterior
+        // Clear previous reconnection timeout
         if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
         }
 
         try {
+            console.log('Attempting to connect WebSocket for travel:', travelId);
             const ws = new WebSocket(`ws://localhost:8000/api/travels/${travelId}/ws?token=${encodeURIComponent(token)}`);
             wsRef.current = ws;
 
@@ -75,9 +91,9 @@ const ChatSection = ({ travelId }) => {
                         const message = data.data;
                         console.log('Message data:', message);
                         
-                        // Verificar que el mensaje pertenece al viaje actual
+                        // Verify that the message belongs to the current travel
                         if (message.travel_id === travelId) {
-                            // Actualizar el mensaje del usuario con el ID real del backend
+                            // Update user message with real backend ID
                             if (message.is_user) {
                                 setMessages(prevMessages => {
                                     const updatedMessages = prevMessages.map(m => {
@@ -89,7 +105,7 @@ const ChatSection = ({ travelId }) => {
                                     return updatedMessages;
                                 });
                             } else {
-                                // Agregar mensaje del asistente
+                                // Add assistant message
                                 const assistantMessage = {
                                     id: message.id,
                                     content: message.content,
@@ -123,7 +139,7 @@ const ChatSection = ({ travelId }) => {
                 console.log('WebSocket disconnected:', event.code);
                 setConnected(false);
 
-                // Solo intentar reconectar si estamos en el mismo viaje
+                // Only try to reconnect if we're on the same travel
                 if (travelId === currentTravelIdRef.current) {
                     const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
                     reconnectAttemptsRef.current += 1;
@@ -160,12 +176,19 @@ const ChatSection = ({ travelId }) => {
     }, [travelId]);
 
     const loadChatHistory = async () => {
+        if (!travelId) {
+            console.log('No travelId provided, skipping chat history load');
+            setLoading(false);
+            return;
+        }
+
         try {
             const token = localStorage.getItem('token');
             if (!token) {
                 throw new Error('No authentication token found');
             }
 
+            console.log('Loading chat history for travel:', travelId);
             const response = await fetch(`http://localhost:8000/api/travels/${travelId}/chat`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -196,7 +219,7 @@ const ChatSection = ({ travelId }) => {
                 throw new Error('No authentication token found');
             }
 
-            // Crear el mensaje del usuario con timestamp en formato ISO
+            // Create user message with ISO timestamp format
             const userMessage = {
                 id: `temp-${Date.now()}`,
                 content: newMessage,
@@ -206,7 +229,7 @@ const ChatSection = ({ travelId }) => {
                 travel_id: travelId
             };
 
-            // Agregar el mensaje al estado local inmediatamente
+            // Add message to local state immediately
             setMessages(prevMessages => [...prevMessages, userMessage]);
             setNewMessage('');
 
@@ -219,7 +242,7 @@ const ChatSection = ({ travelId }) => {
                 }
             };
 
-            // Enviar mensaje a través de WebSocket
+            // Send message through WebSocket
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                 wsRef.current.send(JSON.stringify(message));
             } else {
@@ -240,26 +263,73 @@ const ChatSection = ({ travelId }) => {
 
     if (loading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <CircularProgress />
+            <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '100%',
+                background: 'rgba(255, 255, 255, 0.5)',
+                borderRadius: 2
+            }}>
+                <CircularProgress size={40} />
             </Box>
         );
     }
 
     return (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            flexDirection: 'column',
+            background: 'rgba(255, 255, 255, 0.3)',
+            borderRadius: 2,
+            overflow: 'hidden'
+        }}>
+            {/* Chat Header */}
+            <Box sx={{
+                p: 2,
+                background: `linear-gradient(135deg, 
+                    ${theme.palette.primary.main} 0%, 
+                    ${theme.palette.primary.dark} 100%)`,
+                color: 'white',
+                borderRadius: '8px 8px 0 0'
+            }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Travel Assistant
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    {connected ? 'Connected' : 'Connecting...'}
+                </Typography>
+            </Box>
+
+            {/* Messages Area */}
             <Paper 
-                elevation={3} 
+                elevation={0} 
                 sx={{ 
                     flex: 1, 
                     p: 2, 
                     mb: 2, 
                     overflow: 'auto',
-                    backgroundColor: '#f5f5f5'
+                    background: 'rgba(255, 255, 255, 0.6)',
+                    borderRadius: 0,
+                    '&::-webkit-scrollbar': {
+                        width: '8px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                        background: 'rgba(0, 0, 0, 0.1)',
+                        borderRadius: '4px',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                        background: theme.palette.primary.main,
+                        borderRadius: '4px',
+                    },
+                    '&::-webkit-scrollbar-thumb:hover': {
+                        background: theme.palette.primary.dark,
+                    }
                 }}
             >
                 {error && (
-                    <Typography color="error" sx={{ mb: 2 }}>
+                    <Typography color="error" sx={{ mb: 2, p: 2, background: 'rgba(244, 67, 54, 0.1)', borderRadius: 1 }}>
                         {error}
                     </Typography>
                 )}
@@ -274,18 +344,30 @@ const ChatSection = ({ travelId }) => {
                         }}
                     >
                         <Paper
-                            elevation={1}
+                            elevation={2}
                             sx={{
                                 p: 2,
                                 maxWidth: '70%',
-                                backgroundColor: message.is_user ? '#e3f2fd' : '#ffffff'
+                                background: message.is_user 
+                                    ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
+                                    : 'rgba(255, 255, 255, 0.9)',
+                                color: message.is_user ? 'white' : theme.palette.text.primary,
+                                borderRadius: 3,
+                                backdropFilter: 'blur(10px)',
+                                boxShadow: message.is_user 
+                                    ? '0 4px 12px rgba(15, 139, 141, 0.3)'
+                                    : '0 2px 8px rgba(0, 0, 0, 0.1)'
                             }}
                         >
-                            <Typography variant="body1">
+                            <Typography variant="body1" sx={{ lineHeight: 1.5 }}>
                                 {message.content}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {message.timestamp ? new Date(message.timestamp).toLocaleString('es-ES', {
+                            <Typography variant="caption" sx={{ 
+                                opacity: 0.7,
+                                display: 'block',
+                                mt: 1
+                            }}>
+                                {message.timestamp ? new Date(message.timestamp).toLocaleString('en-US', {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                     day: '2-digit',
@@ -300,7 +382,14 @@ const ChatSection = ({ travelId }) => {
                 <div ref={messagesEndRef} />
             </Paper>
 
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            {/* Input Area */}
+            <Box sx={{ 
+                display: 'flex', 
+                gap: 1,
+                p: 2,
+                background: 'rgba(255, 255, 255, 0.8)',
+                borderRadius: '0 0 8px 8px'
+            }}>
                 <TextField
                     fullWidth
                     multiline
@@ -310,7 +399,12 @@ const ChatSection = ({ travelId }) => {
                     onKeyPress={handleKeyPress}
                     placeholder="Type your message..."
                     disabled={!connected}
-                    sx={{ backgroundColor: '#ffffff' }}
+                    sx={{ 
+                        '& .MuiOutlinedInput-root': {
+                            background: 'rgba(255, 255, 255, 0.9)',
+                            borderRadius: 2
+                        }
+                    }}
                 />
                 <Button
                     variant="contained"
@@ -318,6 +412,13 @@ const ChatSection = ({ travelId }) => {
                     endIcon={<SendIcon />}
                     onClick={sendMessage}
                     disabled={!connected || !newMessage.trim()}
+                    sx={{
+                        backgroundColor: theme.palette.primary.main,
+                        '&:hover': {
+                            backgroundColor: theme.palette.primary.dark,
+                        },
+                        minWidth: 100
+                    }}
                 >
                     Send
                 </Button>

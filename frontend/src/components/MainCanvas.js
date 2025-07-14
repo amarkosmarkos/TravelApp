@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Drawer, List, ListItem, ListItemIcon, ListItemText, Typography, Paper, Dialog, ListItemButton } from '@mui/material';
+import { 
+    Box, 
+    Drawer, 
+    List, 
+    ListItem, 
+    ListItemIcon, 
+    ListItemText, 
+    Typography, 
+    Dialog, 
+    ListItemButton,
+    useTheme
+} from '@mui/material';
 import ChatIcon from '@mui/icons-material/Chat';
 import MapIcon from '@mui/icons-material/Map';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
@@ -14,8 +25,9 @@ const MainCanvas = () => {
     const [itineraryCities, setItineraryCities] = useState([]);
     const [selectedTravel, setSelectedTravel] = useState(null);
     const [showTravelList, setShowTravelList] = useState(false);
+    const theme = useTheme();
 
-    // Cargar el primer viaje al montar el componente
+    // Load the first travel when the component mounts
     useEffect(() => {
         const loadFirstTravel = async () => {
             try {
@@ -29,15 +41,19 @@ const MainCanvas = () => {
                 });
 
                 if (!response.ok) {
-                    throw new Error('Error al cargar los viajes');
+                    throw new Error('Error loading travels');
                 }
 
                 const travels = await response.json();
+                console.log('Loaded travels:', travels);
                 if (travels && travels.length > 0) {
+                    console.log('Setting first travel:', travels[0]);
                     setSelectedTravel(travels[0]);
+                } else {
+                    console.log('No travels found');
                 }
             } catch (error) {
-                console.error('Error al cargar el primer viaje:', error);
+                console.error('Error loading first travel:', error);
             }
         };
 
@@ -45,6 +61,7 @@ const MainCanvas = () => {
     }, []);
 
     const handleMenuClick = (item) => {
+        console.log('Menu item clicked:', item);
         setSelectedItem(item);
     };
 
@@ -55,125 +72,287 @@ const MainCanvas = () => {
     };
 
     const handleSelectTravel = (travel) => {
+        console.log('Travel selected:', travel);
         setSelectedTravel(travel);
         setShowTravelList(false);
     };
 
     const menuItems = [
         { text: 'Chat', icon: <ChatIcon />, value: 'chat' },
-        { text: 'Itinerario', icon: <MapIcon />, value: 'itinerary' },
-        { text: 'Visita', icon: <LocationOnIcon />, value: 'visit' },
-        { text: 'Lugares', icon: <PlaceIcon />, value: 'places' },
-        { text: 'Vuelos', icon: <FlightIcon />, value: 'flights' },
+        { text: 'Itinerary', icon: <MapIcon />, value: 'itinerary' },
+        { text: 'Visits', icon: <LocationOnIcon />, value: 'visit' },
+        { text: 'Places', icon: <PlaceIcon />, value: 'places' },
+        { text: 'Flights', icon: <FlightIcon />, value: 'flights' },
     ];
 
+    console.log('Current selectedTravel:', selectedTravel);
+    console.log('Current selectedItem:', selectedItem);
+
     return (
-        <Box sx={{ 
-            display: 'flex', 
-            height: '100%',
-            overflow: 'hidden'
+        <Box sx={{
+            display: 'flex',
+            height: '100vh',
+            overflow: 'hidden',
+            background: `linear-gradient(135deg, 
+                rgba(15, 139, 141, 0.05) 0%, 
+                rgba(236, 154, 41, 0.03) 50%, 
+                rgba(185, 163, 148, 0.02) 100%)`,
+            position: 'relative'
         }}>
+            {/* Background Pattern */}
+            <Box sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: 'url(../assets/images/background_lake_mountains.jpg)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                opacity: 0.1,
+                zIndex: 0
+            }} />
+
+            {/* Sidebar */}
             <Drawer
                 variant="permanent"
                 anchor="left"
                 sx={{
-                    width: 240,
+                    width: 300,
                     flexShrink: 0,
+                    zIndex: 1,
                     '& .MuiDrawer-paper': {
-                        width: 240,
+                        width: 300,
                         boxSizing: 'border-box',
-                        backgroundColor: '#f5f5f5',
-                        borderRight: '1px solid rgba(0, 0, 0, 0.12)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(10px)',
+                        borderRight: `1px solid ${theme.palette.divider}`,
                         marginTop: '64px',
                         height: 'calc(100vh - 64px)',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        boxShadow: '2px 0 20px rgba(0, 0, 0, 0.1)'
                     },
                 }}
             >
-                <Box sx={{ p: 2 }}>
-                    <Typography variant="h6" sx={{ mb: 1 }}>
-                        Viaje
+                {/* Header Section */}
+                <Box sx={{
+                    p: 3,
+                    background: `linear-gradient(135deg, 
+                        ${theme.palette.primary.main} 0%, 
+                        ${theme.palette.primary.dark} 100%)`,
+                    color: 'white',
+                    borderBottom: `1px solid ${theme.palette.divider}`
+                }}>
+                    <Typography variant="h6" sx={{ mb: 1, fontWeight: 700 }}>
+                        Current Trip
                     </Typography>
                     <Typography 
                         variant="subtitle1" 
-                        sx={{ 
+                        sx={{
                             cursor: 'pointer',
-                            color: 'primary.main',
-                            '&:hover': { textDecoration: 'underline' }
+                            color: 'rgba(255, 255, 255, 0.9)',
+                            fontWeight: 500,
+                            '&:hover': {
+                                color: 'white',
+                                textDecoration: 'underline'
+                            }
                         }}
                         onClick={() => setShowTravelList(true)}
                     >
-                        {selectedTravel ? selectedTravel.title : 'Viaje por determinar'}
+                        {selectedTravel ? selectedTravel.title : 'Select a trip'}
                     </Typography>
                 </Box>
-                <List sx={{ overflow: 'auto' }}>
+
+                {/* Navigation Menu */}
+                <List sx={{ overflow: 'auto', p: 2, flex: 1 }}>
                     {menuItems.map((item) => (
-                        <ListItem key={item.value} disablePadding>
+                        <ListItem key={item.value} disablePadding sx={{ mb: 1 }}>
                             <ListItemButton
                                 onClick={() => handleMenuClick(item.value)}
                                 selected={selectedItem === item.value}
                                 sx={{
+                                    borderRadius: 3,
+                                    mx: 1,
+                                    py: 2,
                                     '&.Mui-selected': {
-                                        backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                        backgroundColor: theme.palette.primary.main,
+                                        color: 'white',
+                                        boxShadow: '0 4px 12px rgba(15, 139, 141, 0.3)',
                                         '&:hover': {
-                                            backgroundColor: 'rgba(0, 0, 0, 0.12)',
+                                            backgroundColor: theme.palette.primary.dark,
                                         },
+                                        '& .MuiListItemIcon-root': {
+                                            color: 'white',
+                                        }
                                     },
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(15, 139, 141, 0.1)',
+                                        transform: 'translateX(4px)',
+                                        transition: 'all 0.3s ease'
+                                    },
+                                    transition: 'all 0.3s ease'
                                 }}
                             >
-                                <ListItemIcon>
+                                <ListItemIcon sx={{
+                                    color: selectedItem === item.value ? 
+                                        'white' : theme.palette.text.secondary,
+                                    minWidth: 40
+                                }}>
                                     {item.icon}
                                 </ListItemIcon>
-                                <ListItemText primary={item.text} />
+                                <ListItemText 
+                                    primary={item.text} 
+                                    primaryTypographyProps={{
+                                        fontWeight: selectedItem === item.value ? 700 : 500,
+                                        fontSize: '1rem'
+                                    }}
+                                />
                             </ListItemButton>
                         </ListItem>
                     ))}
                 </List>
             </Drawer>
 
+            {/* Main Content Area */}
             <Box
                 component="main"
                 sx={{
                     flexGrow: 1,
-                    p: 3,
-                    backgroundColor: '#f5f5f5',
+                    position: 'relative',
+                    zIndex: 1,
                     height: '100%',
                     overflow: 'hidden',
                     display: 'flex',
                     flexDirection: 'column'
                 }}
             >
-                {/* ChatSection siempre montado pero oculto cuando no está activo */}
+                {/* Chat Section with custom styling */}
                 <Box sx={{ 
                     display: selectedItem === 'chat' ? 'flex' : 'none',
                     flex: 1,
                     flexDirection: 'column',
-                    minHeight: 0
+                    minHeight: 0,
+                    p: 3,
+                    background: 'rgba(255, 255, 255, 0.8)',
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: 3,
+                    m: 2,
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
                 }}>
-                    <ChatSection onTravelResponse={handleTravelResponse} travelId={selectedTravel?._id} />
+                    {selectedTravel ? (
+                        <ChatSection onTravelResponse={handleTravelResponse} travelId={selectedTravel._id} />
+                    ) : (
+                        <Box sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '100%',
+                            textAlign: 'center'
+                        }}>
+                            <Typography variant="h5" sx={{ mb: 2, color: theme.palette.text.secondary }}>
+                                No Trip Selected
+                            </Typography>
+                            <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
+                                Please select a trip to start chatting with the travel assistant.
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
 
-                {/* Otros componentes */}
+                {/* Itinerary Section */}
                 {selectedItem === 'itinerary' && (
-                    <ItinerarySection cities={itineraryCities} travelId={selectedTravel?._id} />
+                    <Box sx={{
+                        flex: 1,
+                        p: 3,
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: 3,
+                        m: 2,
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        {selectedTravel ? (
+                            <ItinerarySection cities={itineraryCities} travelId={selectedTravel._id} />
+                        ) : (
+                            <Box sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '100%',
+                                textAlign: 'center'
+                            }}>
+                                <Typography variant="h5" sx={{ mb: 2, color: theme.palette.text.secondary }}>
+                                    No Trip Selected
+                                </Typography>
+                                <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
+                                    Please select a trip to view the itinerary.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
                 )}
+
+                {/* Other sections with modern design */}
                 {selectedItem !== 'chat' && selectedItem !== 'itinerary' && (
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="h5">
-                            {menuItems.find(item => item.value === selectedItem)?.text}
-                        </Typography>
-                        <Typography variant="body1" sx={{ mt: 2 }}>
-                            Contenido de {menuItems.find(item => item.value === selectedItem)?.text} en desarrollo...
-                        </Typography>
-                    </Paper>
+                    <Box sx={{
+                        flex: 1,
+                        p: 3,
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: 3,
+                        m: 2,
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        <Box sx={{ textAlign: 'center' }}>
+                            <Box sx={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 80,
+                                height: 80,
+                                borderRadius: '50%',
+                                backgroundColor: theme.palette.primary.light,
+                                color: theme.palette.primary.main,
+                                mb: 3
+                            }}>
+                                {menuItems.find(item => item.value === selectedItem)?.icon}
+                            </Box>
+                            <Typography variant="h4" sx={{
+                                mb: 2,
+                                color: theme.palette.primary.main,
+                                fontWeight: 700
+                            }}>
+                                {menuItems.find(item => item.value === selectedItem)?.text}
+                            </Typography>
+                            <Typography variant="body1" sx={{
+                                color: theme.palette.text.secondary,
+                                fontSize: '1.1rem',
+                                maxWidth: 400
+                            }}>
+                                This feature is coming soon. We're working hard to bring you the best travel planning experience.
+                            </Typography>
+                        </Box>
+                    </Box>
                 )}
             </Box>
 
+            {/* Travel List Dialog */}
             <Dialog
                 open={showTravelList}
                 onClose={() => setShowTravelList(false)}
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.2)',
+                        overflow: 'hidden'
+                    }
+                }}
             >
                 <TravelList 
                     onSelectTravel={handleSelectTravel}

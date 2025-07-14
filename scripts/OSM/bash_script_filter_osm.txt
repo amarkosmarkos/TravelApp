@@ -1,0 +1,10 @@
+osmium tags-filter \
+  /mnt/d/TravelApp/OSM/planet-250609.osm.pbf \
+  nwr/tourism \
+  nwr/amenity \
+  nwr/historic \
+  nwr/leisure \
+  nwr/natural \
+  nwr/man_made \
+  nwr/shop \
+  -o /mnt/d/TravelApp/Project/scripts/data/OSM/filtered_sites.osm.pbf

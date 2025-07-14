@@ -14,7 +14,8 @@ from app.database import (
     get_flights_collection,
     get_messages_collection,
     get_database,
-    get_users_collection
+    get_users_collection,
+    get_cities_collection
 )
 from ..models.travel import (
     Travel, TravelCreate, TravelUpdate,
@@ -357,28 +358,22 @@ async def read_itinerary_items(
     return [Itinerary(**doc) async for doc in cursor]
 
 @router.post("/{travel_id}/itinerary", response_model=Itinerary)
-async def create_itinerary_item(
+async def create_or_update_itinerary_endpoint(
     travel_id: str,
     item: ItineraryCreate,
     current_user: User = Depends(get_current_active_user)
 ):
     travels = await get_travels_collection()
     travel = await travels.find_one({"_id": ObjectId(travel_id)})
-    
     if travel is None:
         raise HTTPException(status_code=404, detail="Travel not found")
     if travel["user_id"] != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized to create items for this travel")
-    
     item_dict = item.dict()
     item_dict["travel_id"] = travel_id
-    item_dict["created_at"] = datetime.utcnow()
-    item_dict["updated_at"] = datetime.utcnow()
-    
-    itineraries = await get_itineraries_collection()
-    result = await itineraries.insert_one(item_dict)
-    created_item = await itineraries.find_one({"_id": result.inserted_id})
-    return Itinerary(**created_item)
+    from app.crud import travel as travel_crud
+    itinerary = await travel_crud.create_or_update_itinerary(ItineraryCreate(**item_dict))
+    return itinerary
 
 # Visits
 @router.get("/{travel_id}/visits", response_model=List[Visit])
@@ -769,3 +764,150 @@ async def create_chat_message(
     except Exception as e:
         logger.error(f"Error creating chat message: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 
+
+@router.post("/{travel_id}/itinerary/ai-create")
+async def create_itinerary_with_ai_matching(
+    travel_id: str,
+    ai_cities: List[str],
+    country_code: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Crea un itinerario usando IA para hacer match entre ciudades sugeridas y sitios en BD
+    """
+    try:
+        # Verificar que el travel existe y pertenece al usuario
+        travels = await get_travels_collection()
+        travel = await travels.find_one({"_id": ObjectId(travel_id)})
+        if travel is None:
+            raise HTTPException(status_code=404, detail="Travel not found")
+        if travel["user_id"] != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized for this travel")
+
+        # Obtener todos los sitios disponibles del país específico
+        from app.database import get_sites_collection
+        sites_collection = await get_sites_collection()
+        available_sites = await sites_collection.find(
+            {
+                "entity_type": "site",
+                "subtype": "city",
+                "hierarchy": {"$regex": f"^{country_code}", "$options": "i"}
+            }, 
+            {
+                "name": 1, 
+                "_id": 1, 
+                "normalized_name": 1, 
+                "description": 1,
+                "lat": 1,
+                "lon": 1,
+                "hierarchy": 1
+            }
+        ).to_list(length=None)
+
+        logger.info(f"Found {len(available_sites)} sites for country code {country_code}")
+
+        # Usar IA para hacer match
+        from app.services.ai_matching_service import ai_matching_service
+        matching_result = await ai_matching_service.match_cities_with_sites(
+            ai_cities, 
+            available_sites
+        )
+
+        # Crear itinerario con las ciudades que hicieron match
+        if matching_result.get("matched_cities"):
+            itinerary_result = await ai_matching_service.create_itinerary_from_sites(
+                matching_result["matched_cities"],
+                travel_id,
+                str(current_user.id)
+            )
+
+            return {
+                "success": True,
+                "itinerary": itinerary_result["itinerary"],
+                "matching_result": matching_result,
+                "message": f"Itinerary created with {len(matching_result['matched_cities'])} cities for country {country_code}"
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"No cities matched with database for country {country_code}",
+                "matching_result": matching_result
+            }
+
+    except Exception as e:
+        logger.error(f"Error creating itinerary with AI matching: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating itinerary: {str(e)}"
+        )
+
+@router.get("/sites/available")
+async def get_available_sites(
+    current_user: User = Depends(get_current_active_user),
+    country_code: Optional[str] = None
+):
+    """
+    Obtiene todos los sitios disponibles en la base de datos filtrados por país
+    """
+    try:
+        from app.database import get_sites_collection
+        sites_collection = await get_sites_collection()
+        
+        # Construir query
+        query = {
+            "entity_type": "site",
+            "subtype": "city"
+        }
+        
+        if country_code:
+            # Filtrar por código de país en la jerarquía
+            query["hierarchy"] = {"$regex": f"^{country_code}", "$options": "i"}
+        
+        sites = await sites_collection.find(
+            query, 
+            {
+                "name": 1, 
+                "_id": 1, 
+                "normalized_name": 1, 
+                "description": 1,
+                "lat": 1,
+                "lon": 1,
+                "hierarchy": 1
+            }
+        ).to_list(length=None)
+        
+        return {
+            "available_sites": sites,
+            "total_count": len(sites),
+            "country_code": country_code
+        }
+    except Exception as e:
+        logger.error(f"Error getting available sites: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al obtener los sitios disponibles"
+        ) 
+
+@router.post("/country-code")
+async def get_country_code(
+    country_name: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Obtiene el código de país ISO a partir del nombre del país
+    """
+    try:
+        from app.travel_assistant import travel_assistant
+        country_code = await travel_assistant.determine_country_code(country_name)
+        
+        return {
+            "country_name": country_name,
+            "country_code": country_code,
+            "success": True
+        }
+    except Exception as e:
+        logger.error(f"Error getting country code: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting country code: {str(e)}"
+        ) 

@@ -1,5 +1,17 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { 
+    Box, 
+    Container, 
+    Paper, 
+    TextField, 
+    Button, 
+    Typography, 
+    Alert,
+    CircularProgress,
+    useTheme
+} from "@mui/material";
+import { PersonAddOutlined } from '@mui/icons-material';
 import "../styles/LoginPage.css";
 
 const RegisterPage = () => {
@@ -9,7 +21,9 @@ const RegisterPage = () => {
         password: "",
     });
     const [message, setMessage] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
+    const theme = useTheme();
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -21,6 +35,7 @@ const RegisterPage = () => {
 
     const registerUser = async (e) => {
         e.preventDefault();
+        setIsLoading(true);
         try {
             const response = await fetch("http://localhost:8000/api/auth/register", {
                 method: "POST",
@@ -34,7 +49,7 @@ const RegisterPage = () => {
             
             if (response.ok) {
                 console.log("User registered successfully:", data);
-                setMessage("Usuario registrado exitosamente");
+                setMessage("User registered successfully");
                 setTimeout(() => navigate("/login"), 2000);
             } else {
                 console.log("Error registering user:", data);
@@ -43,61 +58,158 @@ const RegisterPage = () => {
                 } else if (typeof data.detail === 'string') {
                     setMessage(data.detail);
                 } else {
-                    setMessage("Error al registrar el usuario");
+                    setMessage("Error registering user");
                 }
             }
         } catch (error) {
             console.error("Error:", error);
-            setMessage("Error de conexión. Por favor, intente de nuevo.");
+            setMessage("Connection error. Please try again.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
-        <div className="login-container">
-            <div className="form-container">
-                <h1>Registro</h1>
-                <form onSubmit={registerUser}>
-                    <div>
-                        <label>Nombre completo:</label>
-                        <input
-                            type="text"
+        <Box sx={{
+            minHeight: '100vh',
+            background: `linear-gradient(135deg, 
+                rgba(15, 139, 141, 0.9) 0%, 
+                rgba(236, 154, 41, 0.8) 50%, 
+                rgba(185, 163, 148, 0.7) 100%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 2
+        }}>
+            <Container maxWidth="sm">
+                <Paper elevation={8} sx={{
+                    p: 4,
+                    borderRadius: 3,
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(10px)',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+                }}>
+                    <Box sx={{ textAlign: 'center', mb: 4 }}>
+                        <Box sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 64,
+                            height: 64,
+                            borderRadius: '50%',
+                            backgroundColor: theme.palette.secondary.main,
+                            color: 'white',
+                            mb: 2
+                        }}>
+                            <PersonAddOutlined sx={{ fontSize: 32 }} />
+                        </Box>
+                        <Typography variant="h4" component="h1" sx={{
+                            fontWeight: 700,
+                            color: theme.palette.text.primary,
+                            mb: 1
+                        }}>
+                            Create Account
+                        </Typography>
+                        <Typography variant="body1" sx={{
+                            color: theme.palette.text.secondary
+                        }}>
+                            Join us and start planning your next adventure
+                        </Typography>
+                    </Box>
+
+                    <form onSubmit={registerUser}>
+                        <TextField
+                            fullWidth
+                            label="Full Name"
                             name="full_name"
                             value={userData.full_name}
                             onChange={handleChange}
                             required
+                            disabled={isLoading}
+                            sx={{ mb: 3 }}
+                            variant="outlined"
                         />
-                    </div>
-                    <div>
-                        <label>Email:</label>
-                        <input
+                        <TextField
+                            fullWidth
+                            label="Email"
                             type="email"
                             name="email"
                             value={userData.email}
                             onChange={handleChange}
                             required
+                            disabled={isLoading}
+                            sx={{ mb: 3 }}
+                            variant="outlined"
                         />
-                    </div>
-                    <div>
-                        <label>Contraseña:</label>
-                        <input
+                        <TextField
+                            fullWidth
+                            label="Password"
                             type="password"
                             name="password"
                             value={userData.password}
                             onChange={handleChange}
                             required
+                            disabled={isLoading}
+                            sx={{ mb: 3 }}
+                            variant="outlined"
                         />
-                    </div>
-                    {message && <p style={{ color: message.includes("exitosamente") ? "#4CAF50" : "red" }}>{message}</p>}
-                    <button type="submit">Registrarse</button>
-                </form>
-                <button 
-                    onClick={() => navigate("/login")}
-                    style={{ marginTop: "10px", backgroundColor: "transparent", border: "none", color: "white" }}
-                >
-                    ¿Ya tienes cuenta? Inicia sesión
-                </button>
-            </div>
-        </div>
+                        
+                        {message && (
+                            <Alert 
+                                severity={message.includes("successfully") ? "success" : "error"} 
+                                sx={{ mb: 3 }}
+                            >
+                                {message}
+                            </Alert>
+                        )}
+                        
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            disabled={isLoading}
+                            sx={{
+                                py: 1.5,
+                                fontSize: '1.1rem',
+                                fontWeight: 600,
+                                backgroundColor: theme.palette.secondary.main,
+                                '&:hover': {
+                                    backgroundColor: theme.palette.secondary.dark,
+                                }
+                            }}
+                        >
+                            {isLoading ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <CircularProgress size={20} color="inherit" />
+                                    Creating account...
+                                </Box>
+                            ) : (
+                                'Create Account'
+                            )}
+                        </Button>
+                    </form>
+
+                    <Box sx={{ textAlign: 'center', mt: 3 }}>
+                        <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+                            Already have an account?{' '}
+                            <Button
+                                onClick={() => navigate("/login")}
+                                sx={{
+                                    color: theme.palette.secondary.main,
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    '&:hover': {
+                                        textDecoration: 'underline'
+                                    }
+                                }}
+                            >
+                                Sign in here
+                            </Button>
+                        </Typography>
+                    </Box>
+                </Paper>
+            </Container>
+        </Box>
     );
 };
 

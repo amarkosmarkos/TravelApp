@@ -36,6 +36,10 @@ async def reset_collections():
         await db.messages.create_index([("conversation_id", 1), ("travel_id", 1)])
         await db.messages.create_index("timestamp")
         
+        # Crear índice único en travel_id para itinerarios
+        itineraries = db["itineraries"]
+        itineraries.create_index("travel_id", unique=True)
+        
         logger.info("Índices creados correctamente")
         logger.info("Reset completado exitosamente")
 

@@ -1,0 +1,24 @@
+2025-06-20 17:32:00,608 - app.travel_assistant - INFO - Procesando mensaje del usuario 684737965d4056e12086a134: me puedes listar las ciudades que me has dicho¿
+2025-06-20 17:32:00,609 - app.travel_assistant - INFO - Usando historial proporcionado: 9 mensajes
+2025-06-20 17:32:00,609 - app.travel_assistant - INFO - Enviando mensaje a Azure OpenAI
+2025-06-20 17:32:01,878 - app.travel_assistant - INFO - Respuesta recibida de Azure OpenAI: ChatCompletionMessage(content='Claro, las ciudades que te recomendaría visitar en Japón son:\n- Tokyo\n- Kyoto\n- Osaka\n\nEstas ciudades ofrecen una combinación única de modernidad, tradición, historia y gastronomía, ¡ideal para disfrutar de un viaje inolvidable en Japón!', role='assistant', function_call=None, tool_calls=None)
+2025-06-20 17:32:10,422 - app.travel_assistant - INFO - Procesando mensaje del usuario 684737965d4056e12086a134: añademe Kobe
+2025-06-20 17:32:10,422 - app.travel_assistant - INFO - Usando historial proporcionado: 11 mensajes
+2025-06-20 17:32:10,423 - app.travel_assistant - INFO - Enviando mensaje a Azure OpenAI
+2025-06-20 17:32:11,388 - app.travel_assistant - INFO - Respuesta recibida de Azure OpenAI: ChatCompletionMessage(content=None, role='assistant', function_call=FunctionCall(arguments='{"cities":["Tokyo","Kyoto","Osaka","Kobe"],"country_code":"JP"}', name='create_itinerary'), tool_calls=None)
+2025-06-20 17:32:11,389 - app.travel_assistant - INFO - Llamando a función create_itinerary con args: {'cities': ['Tokyo', 'Kyoto', 'Osaka', 'Kobe'], 'country_code': 'JP'}
+2025-06-20 17:34:15,222 - app.travel_assistant - INFO - Procesando mensaje del usuario 684737965d4056e12086a134: Organízame un viaje por parís
+2025-06-20 17:34:15,222 - app.travel_assistant - INFO - Usando historial proporcionado: 1 mensajes
+2025-06-20 17:34:15,223 - app.travel_assistant - INFO - Enviando mensaje a Azure OpenAI
+2025-06-20 17:34:15,956 - app.travel_assistant - INFO - Respuesta recibida de Azure OpenAI: ChatCompletionMessage(content=None, role='assistant', function_call=FunctionCall(arguments='{"cities":["Paris"],"country_code":"FR"}', name='create_itinerary'), tool_calls=None)
+2025-06-20 17:34:15,958 - app.travel_assistant - INFO - Llamando a función create_itinerary con args: {'cities': ['Paris'], 'country_code': 'FR'}
+2025-06-20 17:34:48,060 - app.travel_assistant - INFO - Procesando mensaje del usuario 684737965d4056e12086a134: y ahora uno por pueblecitos perdidos de guipuzcoa
+2025-06-20 17:34:48,062 - app.travel_assistant - INFO - Usando historial proporcionado: 3 mensajes
+2025-06-20 17:34:48,062 - app.travel_assistant - INFO - Enviando mensaje a Azure OpenAI
+2025-06-20 17:34:48,904 - app.travel_assistant - INFO - Respuesta recibida de Azure OpenAI: ChatCompletionMessage(content=None, role='assistant', function_call=FunctionCall(arguments='{"cities":["Zarautz","Getaria","Zumaia","Hondarribia"],"country_code":"ES"}', name='create_itinerary'), tool_calls=None)
+2025-06-20 17:34:48,905 - app.travel_assistant - INFO - Llamando a función create_itinerary con args: {'cities': ['Zarautz', 'Getaria', 'Zumaia', 'Hondarribia'], 'country_code': 'ES'}
+2025-06-20 17:35:08,319 - app.travel_assistant - INFO - Procesando mensaje del usuario 684737965d4056e12086a134: organizame ese itinerario
+2025-06-20 17:35:08,319 - app.travel_assistant - INFO - Usando historial proporcionado: 5 mensajes
+2025-06-20 17:35:08,320 - app.travel_assistant - INFO - Enviando mensaje a Azure OpenAI
+2025-06-20 17:35:09,189 - app.travel_assistant - INFO - Respuesta recibida de Azure OpenAI: ChatCompletionMessage(content=None, role='assistant', function_call=FunctionCall(arguments='{"cities":["Zarautz","Getaria","Zumaia","Hondarribia"],"country_code":"ES"}', name='create_itinerary'), tool_calls=None)
+2025-06-20 17:35:09,190 - app.travel_assistant - INFO - Llamando a función create_itinerary con args: {'cities': ['Zarautz', 'Getaria', 'Zumaia', 'Hondarribia'], 'country_code': 'ES'}

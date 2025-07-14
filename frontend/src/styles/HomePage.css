@@ -1,25 +1,52 @@
 .home-container {
     min-height: 100vh;
     width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-image: url('../assets/images/background_lake_mountains.jpg');
-    background-size: cover;
-    background-position: center;
-    color: white;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: relative;
+    overflow: hidden;
 }
 
-.home-container .MuiTypography-root {
-    color: white;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+/* Animaciones suaves para elementos */
+.home-container * {
+    transition: all 0.3s ease;
 }
 
+/* Efectos de hover mejorados para botones */
 .home-container .MuiButton-root {
-    min-width: 200px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Efectos de scroll suave */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Animación fadeInUp */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Animación para elementos que aparecen con delay */
+.fadeInUp {
+    animation: fadeInUp 1s ease-out;
+}
+
+/* Mejoras para dispositivos móviles */
+@media (max-width: 768px) {
+    .home-container {
+        padding: 0;
+    }
+}
+
+/* Optimizaciones para pantallas grandes */
+@media (min-width: 1200px) {
+    .home-container {
+        padding: 0;
+    }
 } 

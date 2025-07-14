@@ -14,6 +14,7 @@ node_modules/
 frontend/node_modules/
 backend/venv/
 /backend/venv/
-
-
+**/data/
+**/logs/
+**/scripts_venv/
 

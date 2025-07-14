@@ -3,8 +3,8 @@ import {
     Box,
     List,
     ListItem,
-    ListItemText,
     ListItemButton,
+    ListItemText,
     Typography,
     Button,
     Dialog,
@@ -12,9 +12,9 @@ import {
     DialogContent,
     DialogActions,
     TextField,
-    Paper,
+    IconButton,
     Divider,
-    IconButton
+    Paper
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
@@ -89,7 +89,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
             setNewTravelName('');
         } catch (error) {
             console.error('Error creating travel:', error);
-            // Aquí podrías mostrar un mensaje de error al usuario
+            // Here you could show an error message to the user
         } finally {
             setIsLoading(false);
         }
@@ -98,7 +98,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
     return (
         <Box sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}>
             <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" component="h2">Mis Viajes</Typography>
+                <Typography variant="h6" component="h2">My Trips</Typography>
                 <Button
                     variant="contained"
                     startIcon={<AddIcon />}
@@ -110,7 +110,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                         }
                     }}
                 >
-                    Nuevo Viaje
+                    New Trip
                 </Button>
             </Box>
             <Divider />
@@ -118,7 +118,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                 {travels.length === 0 ? (
                     <Box sx={{ p: 2, textAlign: 'center' }}>
                         <Typography variant="body2" color="text.secondary">
-                            No tienes viajes creados
+                            You don't have any trips created
                         </Typography>
                     </Box>
                 ) : (
@@ -137,7 +137,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                                 }}
                             >
                                 <ListItemText
-                                    primary={travel.title || 'Sin título'}
+                                    primary={travel.title || 'Untitled'}
                                     primaryTypographyProps={{
                                         fontWeight: selectedTravel?._id === travel._id ? 'bold' : 'normal',
                                         fontSize: '1rem'
@@ -170,7 +170,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                     backgroundColor: 'primary.main',
                     color: 'white'
                 }}>
-                    <Typography variant="h6">Crear Nuevo Viaje</Typography>
+                    <Typography variant="h6">Create New Trip</Typography>
                     <IconButton
                         aria-label="close"
                         onClick={() => setOpenDialog(false)}
@@ -189,12 +189,12 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                         <TextField
                             autoFocus
                             margin="dense"
-                            label="Nombre del Viaje"
+                            label="Trip Name"
                             fullWidth
                             value={newTravelName}
                             onChange={(e) => setNewTravelName(e.target.value)}
                             variant="outlined"
-                            placeholder="Ej: Viaje a París"
+                            placeholder="Ex: Trip to Paris"
                         />
                     </Paper>
                 </DialogContent>
@@ -203,7 +203,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                         onClick={() => setOpenDialog(false)}
                         sx={{ mr: 1 }}
                     >
-                        Cancelar
+                        Cancel
                     </Button>
                     <Button 
                         onClick={handleCreateTravel} 
@@ -216,7 +216,7 @@ const TravelList = ({ onSelectTravel, selectedTravel }) => {
                             }
                         }}
                     >
-                        {isLoading ? 'Creando...' : 'Crear Viaje'}
+                        {isLoading ? 'Creating...' : 'Create Trip'}
                     </Button>
                 </DialogActions>
             </Dialog>

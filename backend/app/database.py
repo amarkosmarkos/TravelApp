@@ -352,4 +352,11 @@ async def get_cities_collection():
     Obtiene la colección de ciudades de la base de datos.
     """
     db = await get_database()
-    return db.cities 
+    return db.cities
+
+async def get_sites_collection():
+    """
+    Obtiene la colección de sitios turísticos de la base de datos.
+    """
+    database = await get_database()
+    return database.sites 

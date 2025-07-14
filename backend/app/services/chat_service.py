@@ -140,43 +140,38 @@ class ChatService:
                     assistant_response = response["message"]
 
                     # Si la respuesta incluye un itinerario, crear los registros en la base de datos
-                    if "cities" in response and response.get("intention") == "reformulate_itinerary":
+                    if "cities" in response and response.get("intention") == "itinerary_created":
                         try:
-                            # Obtener la colección de ciudades
-                            cities_collection = await get_cities_collection()
-                            itinerary_cities = []
-
-                            # Para cada ciudad en la respuesta del LLM
+                            # Usar el servicio de AI matching para crear el itinerario con sitios
+                            from app.services.ai_matching_service import ai_matching_service
+                            
+                            # Convertir la respuesta del AI a formato de matched_cities
+                            matched_cities = []
                             for city_data in response["cities"]:
-                                # Buscar la ciudad en nuestra base de datos
-                                city = await cities_collection.find_one({"name": city_data["name"]})
-                                if city:
-                                    itinerary_cities.append({
-                                        "name": city["name"],
-                                        "start_date": None,
-                                        "end_date": None,
-                                        "coordinates": {
-                                            "latitude": city["latitude"],
-                                            "longitude": city["longitude"]
-                                        }
+                                site_id = city_data.get("id")
+                                site_name = city_data.get("name")
+                                
+                                if site_id:
+                                    matched_cities.append({
+                                        "ai_name": site_name,
+                                        "db_id": site_id,
+                                        "db_name": site_name,
+                                        "confidence": 1.0  # Alta confianza porque ya viene de la BD
                                     })
-                                    logger.info(f"Ciudad encontrada en la base de datos: {city_data['name']}")
+                                    logger.info(f"Sitio preparado para itinerario: {site_name} (ID: {site_id})")
                                 else:
-                                    logger.warning(f"Ciudad no encontrada en la base de datos: {city_data['name']}")
+                                    logger.warning(f"Ciudad sin ID en la respuesta: {site_name}")
 
-                            if itinerary_cities:
-                                # Crear el itinerario con las ciudades verificadas
-                                itinerary = ItineraryCreate(
-                                    travel_id=travel_id,
-                                    cities=itinerary_cities
+                            if matched_cities:
+                                # Crear itinerario usando el servicio de AI matching
+                                itinerary_result = await ai_matching_service.create_itinerary_from_sites(
+                                    matched_cities,
+                                    travel_id,
+                                    user_id
                                 )
-                                
-                                itineraries = await get_itineraries_collection()
-                                await itineraries.insert_one(itinerary.dict())
-                                
-                                logger.info(f"Itinerario creado exitosamente para travel_id={travel_id} con {len(itinerary_cities)} ciudades")
+                                logger.info(f"Itinerario creado exitosamente para travel_id={travel_id} con {len(matched_cities)} sitios")
                             else:
-                                logger.warning("No se encontraron ciudades válidas para crear el itinerario")
+                                logger.warning("No se encontraron sitios válidos para crear el itinerario")
 
                         except Exception as e:
                             logger.error(f"Error creando itinerario: {str(e)}", exc_info=True)
