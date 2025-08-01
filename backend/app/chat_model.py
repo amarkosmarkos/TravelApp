@@ -40,11 +40,15 @@ class ChatModel:
             print(f"Error al inicializar ChatModel: {str(e)}")
             raise
 
-    def generate_response(self, user_input, chat_history=None):
+    def generate_response(self, user_input, chat_history=None, travel_config=None):
         try:
             # Inicializar el historial si es None
             if chat_history is None:
                 chat_history = []
+            
+            # Si hay configuración de viaje, usar el nuevo sistema de agentes
+            if travel_config:
+                return self._generate_response_with_agents(user_input, chat_history, travel_config)
             
             # Preparar el historial de chat
             messages = []
@@ -83,6 +87,56 @@ class ChatModel:
         except Exception as e:
             print(f"Error en generate_response: {str(e)}")
             error_message = f"Lo siento, ha ocurrido un error al procesar tu mensaje: {str(e)}"
+            return error_message, chat_history or []
+
+    def _generate_response_with_agents(self, user_input, chat_history, travel_config):
+        """
+        Genera respuesta usando el sistema de agentes con configuración de viaje.
+        """
+        try:
+            from app.agents.smart_itinerary_workflow import SmartItineraryWorkflow
+            from datetime import datetime
+            import asyncio
+            
+            # Extraer configuración del viaje
+            travel_id = travel_config.get("travel_id", "default")
+            user_id = travel_config.get("user_email", "default")
+            start_date = travel_config.get("start_date")
+            total_days = travel_config.get("total_days", 7)
+            country = travel_config.get("country", "thailand")
+            
+            # Crear instancia del workflow
+            workflow = SmartItineraryWorkflow()
+            
+            # Procesar con el workflow inteligente usando asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(workflow.process_smart_request(
+                    user_input=user_input,
+                    user_id=user_id,
+                    travel_id=travel_id,
+                    country=country
+                ))
+            finally:
+                loop.close()
+            
+            # Obtener respuesta
+            assistant_message = result.get("message", "No se pudo generar respuesta")
+            
+            # Actualizar historial
+            chat_history.append({"role": "user", "content": user_input})
+            chat_history.append({"role": "assistant", "content": assistant_message})
+            
+            # Mantener solo los últimos 10 mensajes
+            if len(chat_history) > 10:
+                chat_history = chat_history[-10:]
+            
+            return assistant_message, chat_history
+            
+        except Exception as e:
+            print(f"Error en _generate_response_with_agents: {str(e)}")
+            error_message = f"Lo siento, ha ocurrido un error al procesar tu solicitud de viaje: {str(e)}"
             return error_message, chat_history or []
 
 # Instancia global del modelo

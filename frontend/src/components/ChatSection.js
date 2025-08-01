@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, TextField, Button, Paper, Typography, CircularProgress, useTheme } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import TravelSetup from './TravelSetup';
 
 const ChatSection = ({ travelId }) => {
     const [messages, setMessages] = useState([]);
@@ -8,6 +9,8 @@ const ChatSection = ({ travelId }) => {
     const [connected, setConnected] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [showTravelSetup, setShowTravelSetup] = useState(false);
+    const [travelConfig, setTravelConfig] = useState(null);
     const wsRef = useRef(null);
     const messagesEndRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
@@ -261,45 +264,68 @@ const ChatSection = ({ travelId }) => {
         }
     };
 
+    const handleTravelSetupComplete = (config) => {
+        setTravelConfig(config);
+        setShowTravelSetup(false);
+        // Aquí podrías iniciar el chat con la configuración
+        console.log('Configuración de viaje completada:', config);
+    };
+
+    const handleTravelSetupCancel = () => {
+        setShowTravelSetup(false);
+    };
+
+    const showSetupForm = () => {
+        setShowTravelSetup(true);
+    };
+
     if (loading) {
         return (
-            <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '100%',
-                background: 'rgba(255, 255, 255, 0.5)',
-                borderRadius: 2
-            }}>
-                <CircularProgress size={40} />
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    // Mostrar TravelSetup si no hay configuración
+    if (showTravelSetup) {
+        return (
+            <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
+                <TravelSetup 
+                    onSetupComplete={handleTravelSetupComplete}
+                    onCancel={handleTravelSetupCancel}
+                />
             </Box>
         );
     }
 
     return (
         <Box sx={{ 
-            height: '100%', 
             display: 'flex', 
-            flexDirection: 'column',
-            background: 'rgba(255, 255, 255, 0.3)',
-            borderRadius: 2,
-            overflow: 'hidden'
+            flexDirection: 'column', 
+            height: '100%',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
         }}>
-            {/* Chat Header */}
-            <Box sx={{
-                p: 2,
-                background: `linear-gradient(135deg, 
-                    ${theme.palette.primary.main} 0%, 
-                    ${theme.palette.primary.dark} 100%)`,
-                color: 'white',
-                borderRadius: '8px 8px 0 0'
+            {/* Header con botón de configuración */}
+            <Box sx={{ 
+                p: 2, 
+                background: 'rgba(255, 255, 255, 0.9)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.2)'
             }}>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Travel Assistant
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    {connected ? 'Connected' : 'Connecting...'}
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="h6" color="primary">
+                        Travel Assistant
+                    </Typography>
+                    {!travelConfig && (
+                        <Button 
+                            variant="outlined" 
+                            onClick={showSetupForm}
+                            size="small"
+                        >
+                            Configurar Viaje
+                        </Button>
+                    )}
+                </Box>
             </Box>
 
             {/* Messages Area */}

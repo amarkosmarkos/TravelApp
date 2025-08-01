@@ -268,7 +268,7 @@ class AIMatchingService:
                 "_id": {"$in": site_ids}
             }).to_list(length=None)
 
-            # Crear itinerario
+            # Crear itinerario con coordenadas corregidas
             itinerary_data = {
                 "travel_id": travel_id,
                 "cities": [
@@ -277,10 +277,19 @@ class AIMatchingService:
                         "name": site["name"],
                         "normalized_name": site.get("normalized_name", ""),
                         "description": site.get("description", ""),
+                        # Convertir coordenadas de string a float
+                        "latitude": float(site.get("lat", "0")) if site.get("lat") else None,
+                        "longitude": float(site.get("lon", "0")) if site.get("lon") else None,
                         "coordinates": {
-                            "latitude": float(site.get("lat", 0)),
-                            "longitude": float(site.get("lon", 0))
-                        }
+                            "latitude": float(site.get("lat", "0")) if site.get("lat") else None,
+                            "longitude": float(site.get("lon", "0")) if site.get("lon") else None
+                        } if site.get("lat") and site.get("lon") else None,
+                        # Información adicional del sitio
+                        "type": site.get("type", ""),
+                        "entity_type": site.get("entity_type", ""),
+                        "subtype": site.get("subtype", ""),
+                        "wikidata_id": site.get("wikidata_id", ""),
+                        "hierarchy": site.get("hierarchy", [])
                     }
                     for site in site_details
                 ],

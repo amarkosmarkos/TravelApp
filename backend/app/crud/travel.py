@@ -151,15 +151,29 @@ async def create_or_update_itinerary(itinerary: ItineraryCreate) -> Itinerary:
     """
     itineraries = await get_itineraries_collection()
     travel_id = str(itinerary.travel_id)
+    
+    # Crear índice único en travel_id si no existe
+    try:
+        await itineraries.create_index("travel_id", unique=True)
+    except Exception as e:
+        logger.warning(f"Index creation warning: {e}")
+    
+    # Buscar itinerario existente
     existing = await itineraries.find_one({"travel_id": travel_id})
     itinerary_dict = itinerary.dict()
     itinerary_dict["travel_id"] = travel_id  # Asegura que se guarda como string
     itinerary_dict["updated_at"] = datetime.utcnow()
+    
     if existing:
-        await itineraries.update_one({"_id": existing["_id"]}, {"$set": itinerary_dict})
-        updated = await itineraries.find_one({"_id": existing["_id"]})
+        # Actualizar itinerario existente
+        await itineraries.update_one(
+            {"travel_id": travel_id}, 
+            {"$set": itinerary_dict}
+        )
+        updated = await itineraries.find_one({"travel_id": travel_id})
         return Itinerary(**updated)
     else:
+        # Crear nuevo itinerario
         itinerary_dict["created_at"] = datetime.utcnow()
         result = await itineraries.insert_one(itinerary_dict)
         created = await itineraries.find_one({"_id": result.inserted_id})

@@ -93,14 +93,47 @@ class ChatMessage(ChatMessageBase, MongoBaseModel):
 class ItineraryBase(BaseModel):
     travel_id: str  # Debe ser único: relación 1:1 con Travel
     cities: List[dict] = []  # Lista de ciudades con sus fechas
+    total_days: int = 0  # Días totales del viaje
+    exploration_days: int = 0  # Días de exploración
+    transport_days: float = 0.0  # Días de transporte
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda dt: dt.isoformat()
+        }
 
 class ItineraryCreate(ItineraryBase):
     pass
 
 class Itinerary(ItineraryBase, MongoBaseModel):
     pass
+
+class ItineraryItem(BaseModel):
+    """Modelo para elementos individuales del itinerario."""
+    name: str
+    description: Optional[str] = None
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    visit_date: Optional[datetime] = None
+    duration: Optional[int] = None  # en horas
+    arrival_dt: Optional[datetime] = None  # Fecha y hora de llegada a la ciudad
+    departure_dt: Optional[datetime] = None  # Fecha y hora de salida de la ciudad
+    priority: Optional[int] = 1  # 1-5, donde 5 es más importante
+    category: Optional[str] = None  # "attraction", "restaurant", "hotel", etc.
+    
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda dt: dt.isoformat()
+        }
 
 class VisitBase(BaseModel):
     pass

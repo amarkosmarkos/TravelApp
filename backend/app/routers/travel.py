@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, WebSocket, WebSocketDisconnect, Query
-from app.travel_assistant import travel_assistant
 from app.services.chat_service import chat_service
 from typing import List, Optional
 from pydantic import BaseModel
@@ -693,17 +692,52 @@ async def websocket_endpoint(
                 message_data = json.loads(data)
                 logger.info(f"Received message: {message_data}")
 
-                # Procesar mensaje
+                # Extraer el mensaje del usuario
+                user_message = message_data.get("data", {}).get("message", "")
+                if not user_message:
+                    await websocket.send_json({
+                        "type": "error",
+                        "data": {
+                            "message": "Mensaje vacío recibido",
+                            "is_user": False
+                        }
+                    })
+                    continue
+
+                # Procesar mensaje usando el servicio de chat
                 response = await chat_service.process_message(
-                    travel_id=travel_id,
+                    message=user_message,
                     user_id=user_id,
-                    message=message_data["data"]["message"],
+                    travel_id=travel_id,
                     db=db
                 )
 
-                # Enviar respuesta
-                await websocket.send_json(response)
-                logger.info(f"Sent response: {response}")
+                # Formatear respuesta para WebSocket
+                websocket_response = {
+                    "type": "message",
+                    "data": {
+                        "content": response.get("message", "No se pudo procesar el mensaje"),
+                        "is_user": False,
+                        "intention": response.get("intention", "unknown"),
+                        "classification": response.get("classification", {}),
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "travel_id": travel_id,
+                        "user_id": user_id
+                    }
+                }
+
+                # Enviar respuesta a todos los clientes conectados a este travel_id (broadcast)
+                logger.info(f"Enviando broadcast a {len(active_connections.get(travel_id, set()))} clientes")
+                for ws in list(active_connections.get(travel_id, [])):
+                    # No enviar al cliente que originó el mensaje
+                    if ws != websocket:
+                        try:
+                            await ws.send_json(websocket_response)
+                            logger.info(f"Mensaje enviado exitosamente a cliente")
+                        except Exception as e:
+                            logger.error(f"Error enviando mensaje por WebSocket: {e}")
+                            # Remover conexión fallida
+                            active_connections[travel_id].discard(ws)
 
         except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected for user {user_id} and travel {travel_id}")
@@ -897,8 +931,42 @@ async def get_country_code(
     Obtiene el código de país ISO a partir del nombre del país
     """
     try:
-        from app.travel_assistant import travel_assistant
-        country_code = await travel_assistant.determine_country_code(country_name)
+        # Mapeo simple de países a códigos ISO
+        country_mapping = {
+            "thailand": "TH",
+            "japan": "JP", 
+            "spain": "ES",
+            "france": "FR",
+            "italy": "IT",
+            "germany": "DE",
+            "united kingdom": "GB",
+            "uk": "GB",
+            "england": "GB",
+            "usa": "US",
+            "united states": "US",
+            "america": "US",
+            "china": "CN",
+            "south korea": "KR",
+            "korea": "KR",
+            "australia": "AU",
+            "canada": "CA",
+            "brazil": "BR",
+            "argentina": "AR",
+            "mexico": "MX",
+            "peru": "PE",
+            "chile": "CL",
+            "colombia": "CO",
+            "venezuela": "VE",
+            "ecuador": "EC",
+            "bolivia": "BO",
+            "paraguay": "PY",
+            "uruguay": "UY",
+            "guyana": "GY",
+            "suriname": "SR",
+            "french guiana": "GF"
+        }
+        
+        country_code = country_mapping.get(country_name.lower().strip(), "TH")
         
         return {
             "country_name": country_name,
