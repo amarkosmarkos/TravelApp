@@ -30,6 +30,8 @@ from app.dependencies import get_current_active_user
 from ..models.user import User
 from bson import ObjectId
 from datetime import datetime
+import uuid
+import asyncio
 import logging
 import json
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -337,24 +339,85 @@ async def process_chat_message(
         )
 
 # Itinerary Items
-@router.get("/{travel_id}/itinerary", response_model=List[Itinerary])
+@router.get("/{travel_id}/itinerary")
 async def read_itinerary_items(
     travel_id: str,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user)
 ):
-    travels = await get_travels_collection()
-    travel = await travels.find_one({"_id": ObjectId(travel_id)})
-    
-    if travel is None:
-        raise HTTPException(status_code=404, detail="Travel not found")
-    if travel["user_id"] != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to access this itinerary")
-    
-    itineraries = await get_itineraries_collection()
-    cursor = itineraries.find({"travel_id": travel_id}).skip(skip).limit(limit)
-    return [Itinerary(**doc) async for doc in cursor]
+    try:
+        logger.info(f"Fetching itinerary for travel {travel_id} user {current_user.id}")
+        travels = await get_travels_collection()
+        travel = await travels.find_one({"_id": ObjectId(travel_id)})
+        
+        if travel is None:
+            raise HTTPException(status_code=404, detail="Travel not found")
+        if travel["user_id"] != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized to access this itinerary")
+        
+        itineraries = await get_itineraries_collection()
+        cursor = itineraries.find({"travel_id": travel_id}).skip(skip).limit(limit)
+        results = []
+        async for doc in cursor:
+            safe = {}
+            for k, v in doc.items():
+                if k == "_id":
+                    safe["id"] = str(v)
+                elif hasattr(v, "isoformat"):
+                    safe[k] = v.isoformat()
+                else:
+                    safe[k] = v
+
+            # Normalizar coordenadas de ciudades dentro del itinerario
+            cities = safe.get("cities") or []
+            normalized_cities = []
+            for city in cities:
+                try:
+                    # Leer de múltiples fuentes: coordinates | latitude/longitude | lat/lon | metadata
+                    lat = None
+                    lon = None
+                    if isinstance(city.get("coordinates"), dict):
+                        lat = city["coordinates"].get("latitude") or city["coordinates"].get("lat")
+                        lon = city["coordinates"].get("longitude") or city["coordinates"].get("lon")
+                    if lat is None and (city.get("latitude") is not None or city.get("longitude") is not None):
+                        lat = city.get("latitude")
+                        lon = city.get("longitude")
+                    if lat is None and (city.get("lat") is not None or city.get("lon") is not None):
+                        lat = city.get("lat")
+                        lon = city.get("lon")
+                    if lat is None and isinstance(city.get("metadata"), dict):
+                        lat = city["metadata"].get("latitude")
+                        lon = city["metadata"].get("longitude")
+
+                    # Convertir strings a float
+                    def _to_float(x):
+                        try:
+                            return float(x)
+                        except Exception:
+                            return None
+
+                    lat_f = _to_float(lat)
+                    lon_f = _to_float(lon)
+
+                    city_out = dict(city)
+                    if lat_f is not None and lon_f is not None:
+                        city_out["coordinates"] = {"latitude": lat_f, "longitude": lon_f}
+                        # Mantener también campos estándar
+                        city_out["latitude"] = lat_f
+                        city_out["longitude"] = lon_f
+                    normalized_cities.append(city_out)
+                except Exception:
+                    normalized_cities.append(city)
+
+            safe["cities"] = normalized_cities
+            results.append(safe)
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching itinerary: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load itinerary")
 
 @router.post("/{travel_id}/itinerary", response_model=Itinerary)
 async def create_or_update_itinerary_endpoint(
@@ -693,7 +756,9 @@ async def websocket_endpoint(
                 logger.info(f"Received message: {message_data}")
 
                 # Extraer el mensaje del usuario
-                user_message = message_data.get("data", {}).get("message", "")
+                payload = message_data.get("data", {})
+                user_message = payload.get("message", "")
+                correlation_id = payload.get("correlation_id") or str(uuid.uuid4())
                 if not user_message:
                     await websocket.send_json({
                         "type": "error",
@@ -719,25 +784,50 @@ async def websocket_endpoint(
                         "content": response.get("message", "No se pudo procesar el mensaje"),
                         "is_user": False,
                         "intention": response.get("intention", "unknown"),
-                        "classification": response.get("classification", {}),
+                        "classification": {
+                            "type": str(response.get("classification", {}).get("type", "unknown")),
+                            "confidence": float(response.get("classification", {}).get("confidence", 0.0)),
+                            "reason": response.get("classification", {}).get("reason", ""),
+                            "extracted_country": response.get("classification", {}).get("extracted_country", "")
+                        },
+                        "correlation_id": correlation_id,
                         "timestamp": datetime.utcnow().isoformat(),
                         "travel_id": travel_id,
                         "user_id": user_id
                     }
                 }
 
-                # Enviar respuesta a todos los clientes conectados a este travel_id (broadcast)
-                logger.info(f"Enviando broadcast a {len(active_connections.get(travel_id, set()))} clientes")
-                for ws in list(active_connections.get(travel_id, [])):
-                    # No enviar al cliente que originó el mensaje
-                    if ws != websocket:
+                # Si la respuesta fue marcada como duplicada, no enviar nada
+                if websocket_response["data"]["intention"] == "duplicate_ignored" or not websocket_response["data"]["content"]:
+                    logger.info("Respuesta duplicada/neutra detectada: no se envía por WS")
+                    continue
+
+                # Enviar respuesta a todos los clientes, incluido el emisor, con timeout y en paralelo
+                targets = list(active_connections.get(travel_id, []))
+                if not targets:
+                    targets = [websocket]
+
+                logger.info(f"Enviando broadcast a {len(targets)} clientes (incluye emisor)")
+
+                # Serialización segura (Enums → string)
+                safe_text = json.dumps(
+                    websocket_response,
+                    default=lambda o: getattr(o, 'value', str(o))
+                )
+
+                async def _safe_send(ws):
+                    try:
+                        await asyncio.wait_for(ws.send_text(safe_text), timeout=2.0)
+                        logger.info("Mensaje enviado exitosamente a cliente")
+                    except Exception as e:
+                        logger.error(f"Error enviando mensaje por WebSocket: {e}")
+                        # Remover conexión fallida
                         try:
-                            await ws.send_json(websocket_response)
-                            logger.info(f"Mensaje enviado exitosamente a cliente")
-                        except Exception as e:
-                            logger.error(f"Error enviando mensaje por WebSocket: {e}")
-                            # Remover conexión fallida
                             active_connections[travel_id].discard(ws)
+                        except Exception:
+                            pass
+
+                await asyncio.gather(*[ _safe_send(ws) for ws in targets ], return_exceptions=True)
 
         except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected for user {user_id} and travel {travel_id}")

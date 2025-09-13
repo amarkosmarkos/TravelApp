@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Divider } from '@mui/material';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 import CityList from './CityList';
 import MapViewReal from './MapViewReal';
 
@@ -18,10 +21,10 @@ const ItinerarySection = ({ cities, travelId }) => {
                     throw new Error('No authentication token found');
                 }
 
-                const response = await fetch(`http://localhost:8000/api/travels/${travelId}/itinerary`, {
+                const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+                const response = await fetch(`${API_URL}/api/travels/${travelId}/itinerary`, {
                     headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Authorization': `Bearer ${token}`
                     }
                 });
 
@@ -126,7 +129,7 @@ const ItinerarySection = ({ cities, travelId }) => {
                 overflow: 'hidden',
                 minHeight: 0
             }}>
-                {/* Left Column - City List (40%) */}
+                {/* Left Column - City List + Itinerary text (40%) */}
                 <Box sx={{ 
                     width: '40%',
                     borderRight: '1px solid',
@@ -136,6 +139,7 @@ const ItinerarySection = ({ cities, travelId }) => {
                     flexDirection: 'column',
                     overflow: 'hidden'
                 }}>
+                    {/* Removed Itinerary Details panel as requested */}
                     <CityList 
                         cities={citiesToDisplay}
                         selectedCityIndex={selectedCityIndex}

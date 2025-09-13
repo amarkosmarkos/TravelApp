@@ -47,10 +47,11 @@ class TimeBudgetScheduler:
     Gestor de presupuesto de tiempo para itinerarios de viaje.
     """
     
-    def __init__(self, total_days: int, start_dt: datetime):
+    def __init__(self, total_days: int, start_dt: datetime, transport_provider: Optional[object] = None):
         self.total_hours = total_days * 24
         self.start_dt = start_dt
         self.avg_speed_kmh = 70  # velocidad promedio carretera
+        self.transport_provider = transport_provider  # opcional: servicio externo
         
     def allocate_time(self, city_scores: List[Dict[str, Any]], 
                      transport_matrix: Dict[str, Dict[str, float]] = None) -> TravelPlan:
@@ -178,6 +179,14 @@ class TimeBudgetScheduler:
         Calcula horas de transporte entre dos ciudades usando coordenadas.
         """
         try:
+            # Si hay proveedor externo, intentar primero
+            if self.transport_provider and hasattr(self.transport_provider, "get_hours_between"):
+                try:
+                    hours = self.transport_provider.get_hours_between(city1, city2)
+                    if isinstance(hours, (int, float)) and hours > 0:
+                        return float(hours)
+                except Exception as e:
+                    logger.warning(f"Transport provider error: {e}")
             lat1 = city1.get("latitude") or city1.get("lat")
             lon1 = city1.get("longitude") or city1.get("lon")
             lat2 = city2.get("latitude") or city2.get("lat")

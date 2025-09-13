@@ -2,12 +2,13 @@
 Agente especializado en seleccionar destinos inteligentemente usando IA.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from openai import AzureOpenAI
 from app.config import settings
 from app.services.travel_time_service import travel_time_service
 import logging
 import json
+from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class DestinationSelectionAgent:
                 country, total_days, sites_formatted, user_preferences
             )
             
-            # Llamar a la IA
+            # Llamar a la IA (forzar salida JSON)
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
@@ -71,30 +72,52 @@ INSTRUCCIONES:
 4. Asigna un score de relevancia (1-10) a cada destino
 5. Considera el número total de días disponibles
 
-RESPONDE EN FORMATO JSON:
+RESPONDE SOLO EN JSON VÁLIDO (sin texto adicional).
+FORMATO:
 {
     "selected_cities": [
         {
             "name": "nombre de la ciudad",
-            "score": número de relevancia (1-10),
-            "reason": "razón por la que se seleccionó"
+            "score": 1.0,
+            "reason": "razón"
         }
     ],
-    "total_cities": número de ciudades seleccionadas
+    "total_cities": 0
 }"""
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3
             )
-            
-            # Procesar respuesta
-            response_content = response.choices[0].message.content
-            result = json.loads(response_content)
+
+            # Modelos de validación Pydantic
+            class SelectedCity(BaseModel):
+                name: str
+                score: float
+                reason: Optional[str] = ""
+
+            class SelectionResult(BaseModel):
+                selected_cities: List[SelectedCity]
+                total_cities: int
+
+            # Procesar respuesta con tolerancia a ```json
+            response_content = response.choices[0].message.content or ""
+            try:
+                result_raw = json.loads(response_content)
+            except Exception:
+                import re
+                cleaned = re.sub(r"```[a-zA-Z]*", "", response_content).replace("```", "").strip()
+                result_raw = json.loads(cleaned)
+
+            try:
+                validated = SelectionResult(**result_raw)
+            except ValidationError as ve:
+                logger.error(f"Selección inválida: {ve}")
+                raise
             
             # Validar y optimizar la selección
             optimized_selection = await self._optimize_selection(
-                result, available_sites, total_days
+                validated.dict(), available_sites, total_days
             )
             
             logger.info(f"IA seleccionó {len(optimized_selection['selected_cities'])} destinos")

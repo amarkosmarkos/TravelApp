@@ -94,6 +94,20 @@ class ChatModel:
         Genera respuesta usando el sistema de agentes con configuración de viaje.
         """
         try:
+            # Gating simple: si el input es claramente un saludo o genérico, no dispares flujo
+            lowered = (user_input or "").strip().lower()
+            greetings = ["hola", "hola!", "hola :)", "hi", "hello", "buenas", "buenos dias", "buenas tardes", "buenas noches"]
+            if lowered in greetings or len(lowered) <= 3:
+                assistant_message = (
+                    "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? "
+                    "Dime país y duración (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía)."
+                )
+                chat_history.append({"role": "user", "content": user_input})
+                chat_history.append({"role": "assistant", "content": assistant_message})
+                if len(chat_history) > 10:
+                    chat_history = chat_history[-10:]
+                return assistant_message, chat_history
+
             from app.agents.smart_itinerary_workflow import SmartItineraryWorkflow
             from datetime import datetime
             import asyncio

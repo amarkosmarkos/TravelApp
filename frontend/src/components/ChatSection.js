@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, TextField, Button, Paper, Typography, CircularProgress, useTheme } from '@mui/material';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 import SendIcon from '@mui/icons-material/Send';
 import TravelSetup from './TravelSetup';
 
 const ChatSection = ({ travelId }) => {
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [connected, setConnected] = useState(false);
@@ -12,6 +16,7 @@ const ChatSection = ({ travelId }) => {
     const [showTravelSetup, setShowTravelSetup] = useState(false);
     const [travelConfig, setTravelConfig] = useState(null);
     const wsRef = useRef(null);
+    const seenCorrelationIdsRef = useRef(new Set());
     const messagesEndRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
     const reconnectAttemptsRef = useRef(0);
@@ -26,7 +31,7 @@ const ChatSection = ({ travelId }) => {
         scrollToBottom();
     }, [messages]);
 
-    // Initialize chat when component mounts
+    // Initialize chat cuando monta: carga historial y abre WS
     useEffect(() => {
         if (travelId) {
             console.log('Initializing chat for travel:', travelId);
@@ -42,6 +47,8 @@ const ChatSection = ({ travelId }) => {
             // Clear current messages
             setMessages([]);
             setLoading(true);
+            // Reset deduplicación por correlation_id en cambio de viaje
+            seenCorrelationIdsRef.current = new Set();
             // Update current travel reference
             currentTravelIdRef.current = travelId;
             // Close existing WebSocket connection
@@ -74,7 +81,15 @@ const ChatSection = ({ travelId }) => {
 
         try {
             console.log('Attempting to connect WebSocket for travel:', travelId);
-            const ws = new WebSocket(`ws://localhost:8000/api/travels/${travelId}/ws?token=${encodeURIComponent(token)}`);
+            // Derivar base WS de API_URL (http -> ws, https -> wss)
+            let wsBase;
+            try {
+                const u = new URL(API_URL);
+                wsBase = (u.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + u.host;
+            } catch (e) {
+                wsBase = API_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+            }
+            const ws = new WebSocket(`${wsBase}/api/travels/${travelId}/ws?token=${encodeURIComponent(token)}`);
             wsRef.current = ws;
 
             ws.onopen = () => {
@@ -109,13 +124,21 @@ const ChatSection = ({ travelId }) => {
                                 });
                             } else {
                                 // Add assistant message
+                                const cid = message.correlation_id;
+                                if (cid && seenCorrelationIdsRef.current.has(cid)) {
+                                    return; // evitar duplicados
+                                }
+                                if (cid) {
+                                    seenCorrelationIdsRef.current.add(cid);
+                                }
                                 const assistantMessage = {
                                     id: message.id,
                                     content: message.content,
                                     is_user: false,
                                     timestamp: message.timestamp || new Date().toISOString(),
                                     user_id: 'assistant',
-                                    travel_id: travelId
+                                    travel_id: travelId,
+                                    correlation_id: cid
                                 };
                                 setMessages(prevMessages => [...prevMessages, assistantMessage]);
                             }
@@ -192,7 +215,7 @@ const ChatSection = ({ travelId }) => {
             }
 
             console.log('Loading chat history for travel:', travelId);
-            const response = await fetch(`http://localhost:8000/api/travels/${travelId}/chat`, {
+            const response = await fetch(`${API_URL}/api/travels/${travelId}/chat`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -236,12 +259,17 @@ const ChatSection = ({ travelId }) => {
             setMessages(prevMessages => [...prevMessages, userMessage]);
             setNewMessage('');
 
+            const correlationId = (window.crypto && window.crypto.randomUUID) 
+                ? window.crypto.randomUUID() 
+                : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
             const message = {
                 type: "message",
                 data: {
                     message: newMessage,
                     is_user: true,
-                    travel_id: travelId
+                    travel_id: travelId,
+                    correlation_id: correlationId
                 }
             };
 
@@ -385,9 +413,29 @@ const ChatSection = ({ travelId }) => {
                                     : '0 2px 8px rgba(0, 0, 0, 0.1)'
                             }}
                         >
-                            <Typography variant="body1" sx={{ lineHeight: 1.5 }}>
-                                {message.content}
-                            </Typography>
+                            {message.is_user ? (
+                                <Typography 
+                                    variant="body1" 
+                                    sx={{ 
+                                        lineHeight: 1.5,
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word'
+                                    }}
+                                >
+                                    {message.content}
+                                </Typography>
+                            ) : (
+                                <Box sx={{
+                                    '& h1, & h2, & h3': { marginTop: 1, marginBottom: 1 },
+                                    '& ul': { paddingLeft: 3, marginTop: 0, marginBottom: 1 },
+                                    '& ol': { paddingLeft: 3, marginTop: 0, marginBottom: 1 },
+                                    '& p': { marginTop: 1, marginBottom: 1 }
+                                }}>
+                                    <ReactMarkdown rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+                                        {message.content}
+                                    </ReactMarkdown>
+                                </Box>
+                            )}
                             <Typography variant="caption" sx={{ 
                                 opacity: 0.7,
                                 display: 'block',

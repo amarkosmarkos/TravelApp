@@ -8,6 +8,7 @@ from datetime import datetime
 from app.database import get_messages_collection, get_itineraries_collection
 from app.models.travel import ChatMessageCreate, Message
 from app.agents.smart_itinerary_workflow import SmartItineraryWorkflow
+from app.agents.message_router import MessageRouter, MessageType
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,10 @@ class ChatService:
     
     def __init__(self):
         self.smart_workflow = SmartItineraryWorkflow()
+        self.message_router = MessageRouter()
+        # Anti-duplicados simple en memoria: (user, travel, msg_norm) -> timestamp
+        self._recent_messages: Dict[str, float] = {}
+        self._recent_ttl_sec = 3.0
     
     async def process_message(self, message: str, user_id: str, travel_id: str, db=None) -> Dict[str, Any]:
         """
@@ -25,14 +30,64 @@ class ChatService:
         """
         try:
             logger.info(f"Procesando mensaje: {message}")
+
+            # Deduplicación: evitar doble procesamiento del mismo mensaje en ventana corta
+            import time
+            msg_norm = (message or "").strip().lower()
+            dedup_key = f"{user_id}:{travel_id}:{msg_norm}"
+            now = time.time()
+            last_ts = self._recent_messages.get(dedup_key)
+            if last_ts and (now - last_ts) < self._recent_ttl_sec:
+                logger.info("Mensaje duplicado detectado, ignorando procesamiento")
+                # No guardar nuevamente; devolver respuesta neutra para que WS no envíe
+                return {
+                    "message": "",
+                    "is_user": False,
+                    "intention": "duplicate_ignored",
+                    "classification": {
+                        "type": "duplicate",
+                        "confidence": 1.0,
+                        "reason": "Mensaje repetido en ventana corta",
+                        "extracted_country": ""
+                    },
+                    "travel_id": travel_id,
+                    "user_id": user_id
+                }
+            # Registrar mensaje
+            self._recent_messages[dedup_key] = now
             
             # Guardar mensaje del usuario
             await self._save_user_message(message, user_id, travel_id)
             
-            # Extraer país del mensaje
-            country = self._extract_country_from_message(message)
-            if not country:
-                country = "thailand"  # Default
+            # Clasificar intención (gating)
+            classification = await self.message_router.classify_message(message)
+            message_type = classification.get("type", MessageType.GENERAL_CHAT)
+            confidence = classification.get("confidence", 0.0)
+            country = self._extract_country_from_message(message) or "thailand"
+
+            # Umbral para acciones automáticas
+            auto_threshold = 0.75
+
+            # Si es chat general o confianza baja, pedir aclaración y no crear nada
+            if (message_type == MessageType.GENERAL_CHAT) or (confidence < auto_threshold and message_type not in (MessageType.CREATE_ITINERARY, MessageType.MODIFY_ITINERARY)):
+                assistant_message = (
+                    "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? "
+                    "Dime país y duración (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía)."
+                )
+                await self._save_assistant_message(assistant_message, user_id, travel_id)
+                return {
+                    "message": assistant_message,
+                    "is_user": False,
+                    "intention": "clarify",
+                    "classification": {
+                        "type": message_type.value if hasattr(message_type, 'value') else str(message_type),
+                        "confidence": confidence,
+                        "reason": classification.get("reason", "Baja confianza o chat general"),
+                        "extracted_country": country
+                    },
+                    "travel_id": travel_id,
+                    "user_id": user_id
+                }
             
             # ⭐ USAR EL NUEVO FLUJO CON SELECCIÓN ANTES DEL GRAFO
             response = await self.smart_workflow.process_smart_request(
@@ -48,12 +103,21 @@ class ChatService:
             # Guardar respuesta del asistente
             await self._save_assistant_message(assistant_message, user_id, travel_id)
             
+            # Normalizar clasificación para ser JSON-serializable
+            type_str = message_type.value if hasattr(message_type, 'value') else str(message_type)
+            classification_out = {
+                "type": type_str,
+                "confidence": confidence,
+                "reason": classification.get("reason", ""),
+                "extracted_country": country
+            }
+
             # Devolver respuesta con estructura correcta
             return {
                 "message": assistant_message,
                 "is_user": False,
                 "intention": response.get("intention", "unknown"),
-                "classification": response.get("classification", {}),
+                "classification": response.get("classification", classification_out),
                 "travel_id": travel_id,
                 "user_id": user_id
             }

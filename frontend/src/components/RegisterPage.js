@@ -14,6 +14,8 @@ import {
 import { PersonAddOutlined } from '@mui/icons-material';
 import "../styles/LoginPage.css";
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 const RegisterPage = () => {
     const [userData, setUserData] = useState({
         full_name: "",
@@ -37,7 +39,7 @@ const RegisterPage = () => {
         e.preventDefault();
         setIsLoading(true);
         try {
-            const response = await fetch("http://localhost:8000/api/auth/register", {
+            const response = await fetch(`${API_URL}/api/auth/register`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

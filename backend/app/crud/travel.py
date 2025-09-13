@@ -14,6 +14,7 @@ from ..database import (
     get_conversations_collection
 )
 from ..models.travel import TravelCreate, Travel, ChatCreate, Chat, ChatMessageCreate, ChatMessage, ItineraryCreate, Itinerary, VisitCreate, Visit, PlaceCreate, Place, FlightCreate, Flight, TravelUpdate, Message, MessageCreate
+from app.services.daily_visits_service import daily_visits_service
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import logging
 
@@ -171,12 +172,22 @@ async def create_or_update_itinerary(itinerary: ItineraryCreate) -> Itinerary:
             {"$set": itinerary_dict}
         )
         updated = await itineraries.find_one({"travel_id": travel_id})
+        # Disparar generación automática de daily_visits
+        try:
+            await daily_visits_service.generate_and_save_for_travel(travel_id)
+        except Exception as e:
+            logger.error(f"Error generating daily_visits after update: {e}")
         return Itinerary(**updated)
     else:
         # Crear nuevo itinerario
         itinerary_dict["created_at"] = datetime.utcnow()
         result = await itineraries.insert_one(itinerary_dict)
         created = await itineraries.find_one({"_id": result.inserted_id})
+        # Disparar generación automática de daily_visits
+        try:
+            await daily_visits_service.generate_and_save_for_travel(travel_id)
+        except Exception as e:
+            logger.error(f"Error generating daily_visits after create: {e}")
         return Itinerary(**created)
 
 # Visit operations

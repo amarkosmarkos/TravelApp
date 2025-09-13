@@ -9,6 +9,8 @@ from app.database import get_itineraries_collection, get_itinerary_items_collect
 from app.models.travel import Itinerary, ItineraryItem
 from bson import ObjectId
 import json
+from pydantic import BaseModel, ValidationError
+from app.services.daily_visits_service import daily_visits_service
 
 logger = logging.getLogger(__name__)
 
@@ -357,15 +359,25 @@ class ItineraryModificationAgent:
             cities_mentioned = []
             # Aquí podrías usar NLP para extraer nombres de ciudades
             # Por ahora, devolvemos una lista vacía
+
+            # Extraer días solicitados
+            total_days = self._extract_days_from_text(user_input)
+
+            # Extraer tema preferido (historia, playa, naturaleza, gastronomía)
+            theme = self._extract_theme_from_text(user_input)
             
             return {
                 "intention": intention,
                 "cities_mentioned": cities_mentioned,
                 "user_input": user_input,
+                "total_days": total_days,
+                "theme": theme,
                 "analysis": {
                     "action_type": intention,
                     "confidence": 0.7,
-                    "requires_user_confirmation": False
+                    "requires_user_confirmation": False,
+                    "total_days": total_days,
+                    "theme": theme
                 }
             }
             
@@ -381,6 +393,44 @@ class ItineraryModificationAgent:
                     "requires_user_confirmation": True
                 }
             }
+
+    def _extract_days_from_text(self, text: str) -> int:
+        import re
+        t = text.lower()
+        patterns = [
+            r"(\d+)\s*d[ií]as?",
+            r"(\d+)\s*days?",
+            r"una semana|one week",
+            r"(\d+)\s*semanas?|(\d+)\s*weeks?",
+            r"fin de semana|weekend"
+        ]
+        for p in patterns:
+            m = re.search(p, t)
+            if m:
+                if "semana" in p or "week" in p:
+                    if "una" in p or "one" in p:
+                        return 7
+                    # tomar último grupo con número
+                    num = next((int(g) for g in m.groups() if g and g.isdigit()), None)
+                    if num:
+                        return num * 7
+                if "fin de semana" in p or "weekend" in p:
+                    return 3
+                if m.group(1):
+                    return int(m.group(1))
+        return 0
+
+    def _extract_theme_from_text(self, text: str) -> str:
+        t = text.lower()
+        if any(k in t for k in ["historia", "histórico", "historico", "templo", "museo"]):
+            return "history"
+        if any(k in t for k in ["playa", "beach", "isla", "islas", "snorkel"]):
+            return "beach"
+        if any(k in t for k in ["naturaleza", "montaña", "parque", "senderismo", "trekking"]):
+            return "nature"
+        if any(k in t for k in ["comida", "gastronom", "restaurante", "food"]):
+            return "food"
+        return ""
     
     async def apply_modifications(self, existing_itinerary: Dict[str, Any], 
                                 analysis: Dict[str, Any], available_sites: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -442,7 +492,47 @@ class ItineraryModificationAgent:
             if modification_result.get("success"):
                 # Aplicar los cambios sugeridos por la IA
                 modified_cities = modification_result.get("modified_cities", current_cities)
-                
+
+                # Filtrar por tema si se solicitó (history/beach/nature/food)
+                theme = analysis.get("theme") or analysis.get("analysis", {}).get("theme") or ""
+                if theme:
+                    theme_keywords = {
+                        "history": ["temple", "templo", "museo", "ruins", "ruinas", "historic"],
+                        "beach": ["beach", "playa", "island", "isla", "snorkel"],
+                        "nature": ["park", "parque", "mountain", "montaña", "national"],
+                        "food": ["food", "comida", "restaurant", "restaurante", "market", "mercado"]
+                    }
+                    keys = theme_keywords.get(theme, [])
+                    def matches_theme(city: Dict[str, Any]) -> bool:
+                        text = (city.get("description") or "") + " " + (city.get("type") or "") + " " + (city.get("name") or "")
+                        t = text.lower()
+                        return any(k in t for k in keys) if keys else True
+                    # Mantener ciudades que encajan y, si quedan muy pocas, volver a incluir las originales
+                    themed = [c for c in modified_cities if matches_theme(c)]
+                    if len(themed) >= 2:
+                        modified_cities = themed
+
+                # Redistribuir días al total solicitado (si existe), manteniendo mínimo 1 día por ciudad
+                requested_days = analysis.get("total_days") or analysis.get("analysis", {}).get("total_days") or 0
+                if requested_days and requested_days > 0 and modified_cities:
+                    per_city = max(1, requested_days // len(modified_cities))
+                    remainder = max(0, requested_days - per_city * len(modified_cities))
+                    for idx, city in enumerate(modified_cities):
+                        base_days = per_city + (1 if idx < remainder else 0)
+                        city["days"] = base_days
+
+                # Si no hay days en las ciudades, asignar 2 por defecto y luego normalizar a <= 14
+                if modified_cities and not any(c.get("days") for c in modified_cities):
+                    for c in modified_cities:
+                        c["days"] = 2
+
+                # Normalizar claves de coordenadas
+                for c in modified_cities:
+                    if c.get("lat") and not c.get("latitude"):
+                        c["latitude"] = c.get("lat")
+                    if c.get("lon") and not c.get("longitude"):
+                        c["longitude"] = c.get("lon")
+
                 # Actualizar el itinerario en la base de datos
                 await itineraries_collection.update_one(
                     {"travel_id": travel_id},
@@ -454,16 +544,26 @@ class ItineraryModificationAgent:
                         }
                     }
                 )
-                
+
                 logger.info(f"Itinerario actualizado por IA: {len(modified_cities)} ciudades")
-                
+
+                # Regenerar daily_visits para el travel
+                try:
+                    await daily_visits_service.generate_and_save_for_travel(str(travel_id))
+                except Exception as e:
+                    self.logger.error(f"Error regenerating daily_visits: {e}")
+
+                # Mensaje con pluralización correcta
+                total_cities = len(modified_cities)
+                plural = "ciudad" if total_cities == 1 else "ciudades"
+
                 return {
                     "success": True,
                     "action": "ai_modification",
-                    "message": modification_result.get("message", "Itinerario actualizado por IA"),
+                    "message": modification_result.get("message", f"Itinerario actualizado por IA: {total_cities} {plural}"),
                     "itinerary": {
                         "cities": modified_cities,
-                        "total_items": len(modified_cities),
+                        "total_items": total_cities,
                         "updated_at": datetime.utcnow()
                     }
                 }
@@ -586,29 +686,61 @@ class ItineraryModificationAgent:
             
             logger.info(f"Respuesta de IA recibida")
             
+            # Modelos Pydantic para validar salida
+            class Change(BaseModel):
+                action: str
+                city_name: str
+                reason: str | None = None
+
+            class ModifiedCity(BaseModel):
+                name: str
+                days: int | float | None = None
+                type: str | None = None
+                description: str | None = None
+
+            class ModResult(BaseModel):
+                intention: str
+                changes: List[Change] = []
+                modified_cities: List[ModifiedCity] = []
+                message: str | None = None
+
             # Procesar respuesta
             response_content = response.choices[0].message.content or ""
             logger.info(f"Contenido de respuesta raw: {response_content[:200]}...")
 
-            # Eliminar posibles bloques markdown ```json ... ```
+            # Eliminar posibles bloques markdown ```json ... ``` y validar JSON
             import re
             cleaned = re.sub(r"```[a-zA-Z]*", "", response_content).replace("```", "").strip()
             
             logger.info(f"Contenido limpiado: {cleaned[:200]}...")
-            
-            result = json.loads(cleaned)
-            logger.info(f"Respuesta parseada: {result}")
+            # Intentar parsear con tolerancia
+            try:
+                result_raw = json.loads(cleaned)
+            except Exception:
+                # Intentar extraer el primer bloque JSON entre llaves
+                import re as _re
+                match = _re.search(r"\{[\s\S]*\}", cleaned)
+                if not match:
+                    raise
+                result_raw = json.loads(match.group(0))
+
+            # Validar contra esquema
+            try:
+                validated = ModResult(**result_raw)
+            except ValidationError as ve:
+                logger.error(f"Respuesta IA inválida: {ve}")
+                return {"success": False, "error": "Respuesta IA inválida"}
             
             # Aplicar los cambios sugeridos por la IA
             modified_cities = []
             
-            for city_data in result.get("modified_cities", []):
+            for city_data in validated.modified_cities:
                 # Buscar el sitio correspondiente en available_sites
                 site_data = None
                 for site in available_sites:
-                    if site.get("name", "").lower() == city_data.get("name", "").lower():
+                    if site.get("name", "").lower() == (city_data.name or "").lower():
                         site_data = site.copy()
-                        site_data["days"] = city_data.get("days", 2)
+                        site_data["days"] = int(city_data.days) if city_data.days else 2
                         break
                 
                 if site_data:
@@ -619,8 +751,8 @@ class ItineraryModificationAgent:
             return {
                 "success": True,
                 "modified_cities": modified_cities,
-                "message": result.get("message", "Itinerario actualizado por IA"),
-                "intention": result.get("intention", "modification")
+                "message": validated.message or "Itinerario actualizado por IA",
+                "intention": validated.intention or "modification"
             }
             
         except Exception as e:

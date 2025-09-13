@@ -14,6 +14,8 @@ import {
   Snackbar
 } from '@mui/material';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 const TravelSetup = ({ onSetupComplete, onCancel }) => {
   const [formData, setFormData] = useState({
     start_date: '',
@@ -41,49 +43,57 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
     
     try {
       // Validar datos
-      if (!formData.start_date || !formData.total_days || !formData.country) {
+      if (!formData.start_date || !formData.country) {
         setError('Por favor completa todos los campos obligatorios');
         return;
       }
 
-      // Convertir fecha a formato ISO
+      // Convertir fecha a ISO
       const startDate = new Date(formData.start_date);
-      
-      const setupData = {
-        start_date: startDate.toISOString(),
-        total_days: formData.total_days,
-        country: formData.country,
-        origin_city: formData.origin_city,
-        companions: formData.companions,
-        preferences: formData.preferences
+
+      // El backend espera TravelCreate: { title, destination, start_date?, ... }
+      const travelPayload = {
+        title: `Viaje a ${formData.country}`,
+        destination: formData.country,
+        start_date: startDate.toISOString()
       };
 
-      // Llamar a la API
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/travel/setup', {
+      const response = await fetch(`${API_URL}/api/travels`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(setupData)
+        body: JSON.stringify(travelPayload)
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        setShowSuccess(true);
-        
-        // Llamar callback con la configuración
-        onSetupComplete({
-          ...setupData,
-          travel_id: result.travel_id
-        });
-      } else {
-        throw new Error('Error al guardar configuración');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Error al crear el viaje');
       }
+
+      const result = await response.json();
+      const travelId = result._id || result.id;
+      if (!travelId) {
+        throw new Error('No se pudo obtener el ID del viaje');
+      }
+
+      setShowSuccess(true);
+
+      // Devolver al padre los datos de setup y el ID creado
+      onSetupComplete({
+        start_date: travelPayload.start_date,
+        total_days: formData.total_days,
+        country: formData.country,
+        origin_city: formData.origin_city,
+        companions: formData.companions,
+        preferences: formData.preferences,
+        travel_id: travelId
+      });
     } catch (error) {
       console.error('Error en setup:', error);
-      setError('No se pudo guardar la configuración del viaje');
+      setError(error.message || 'No se pudo guardar la configuración del viaje');
     } finally {
       setIsLoading(false);
     }

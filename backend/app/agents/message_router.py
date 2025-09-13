@@ -221,31 +221,89 @@ Responde SOLO con el tipo en mayúsculas (ej: CREATE_ITINERARY)
             country = await self._extract_country_from_message(message)
             logger.info(f"País extraído del mensaje: {country}")
             
-            # Usar el flujo inteligente
-            from .smart_itinerary_workflow import SmartItineraryWorkflow
-            smart_workflow = SmartItineraryWorkflow()
-            
-            # Obtener historial de mensajes si está disponible
-            travel_messages = context.get("message_history", []) if context else []
-            
-            # Procesar con el flujo inteligente
-            response = await smart_workflow.process_smart_request(
-                user_input=message,
-                user_id=user_id,
-                travel_id=travel_id,
-                country=country  # Usar el país extraído
-            )
-            
-            # Agregar información de clasificación (convertir enum a string)
+            # Decidir acción según intención (gating)
             message_type = classification.get("type", MessageType.GENERAL_CHAT)
-            response["classification"] = {
-                "type": message_type.value if hasattr(message_type, 'value') else str(message_type),
-                "confidence": classification.get("confidence", 0.0),
-                "reason": classification.get("reason", "Clasificación AI: UNKNOWN"),
-                "extracted_country": country
+            confidence = classification.get("confidence", 0.0)
+            type_str = message_type.value if hasattr(message_type, 'value') else str(message_type)
+
+            # Umbral de confianza para acciones automáticas
+            auto_threshold = 0.75
+
+            # Solo crear/modificar si la intención es clara
+            if type_str in (MessageType.CREATE_ITINERARY.value, MessageType.MODIFY_ITINERARY.value) or (
+                message_type in (MessageType.CREATE_ITINERARY, MessageType.MODIFY_ITINERARY)
+            ):
+                from .smart_itinerary_workflow import SmartItineraryWorkflow
+                smart_workflow = SmartItineraryWorkflow()
+
+                response = await smart_workflow.process_smart_request(
+                    user_input=message,
+                    user_id=user_id,
+                    travel_id=travel_id,
+                    country=country
+                )
+
+                response["classification"] = {
+                    "type": type_str if isinstance(type_str, str) else (message_type.value if hasattr(message_type, 'value') else str(message_type)),
+                    "confidence": confidence,
+                    "reason": classification.get("reason", "Clasificación AI: UNKNOWN"),
+                    "extracted_country": country
+                }
+                return response
+
+            # Para búsquedas/optimización: responder sin alterar itinerarios
+            if type_str == MessageType.SEARCH_CITIES.value or message_type == MessageType.SEARCH_CITIES:
+                return {
+                    "message": "¿Qué país o ciudad quieres explorar? Puedo mostrarte opciones y luego crear el itinerario si te encaja.",
+                    "is_user": False,
+                    "intention": "search_cities",
+                    "classification": {
+                        "type": MessageType.SEARCH_CITIES.value,
+                        "confidence": confidence,
+                        "reason": classification.get("reason", "Clasificación AI: SEARCH_CITIES"),
+                        "extracted_country": country
+                    }
+                }
+
+            if type_str == MessageType.OPTIMIZE_ROUTE.value or message_type == MessageType.OPTIMIZE_ROUTE:
+                return {
+                    "message": "Puedo optimizar tu ruta actual. ¿Quieres mantener las mismas ciudades y ordenar por menor desplazamiento, o prefieres cambiar también ciudades?",
+                    "is_user": False,
+                    "intention": "optimize_route_query",
+                    "classification": {
+                        "type": MessageType.OPTIMIZE_ROUTE.value,
+                        "confidence": confidence,
+                        "reason": classification.get("reason", "Clasificación AI: OPTIMIZE_ROUTE"),
+                        "extracted_country": country
+                    }
+                }
+
+            # Si es chat general o confianza baja: pedir aclaración en vez de crear nada
+            if (type_str == MessageType.GENERAL_CHAT.value or message_type == MessageType.GENERAL_CHAT) or confidence < auto_threshold:
+                return {
+                    "message": "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? Dime país y duración aproximada (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía).",
+                    "is_user": False,
+                    "intention": "clarify",
+                    "classification": {
+                        "type": MessageType.GENERAL_CHAT.value,
+                        "confidence": confidence,
+                        "reason": classification.get("reason", "Baja confianza o chat general"),
+                        "extracted_country": country
+                    }
+                }
+
+            # Fallback por si llega un tipo desconocido
+            return {
+                "message": "¿Quieres crear un nuevo itinerario o prefieres que revisemos el actual?",
+                "is_user": False,
+                "intention": "clarify",
+                "classification": {
+                    "type": str(type_str),
+                    "confidence": confidence,
+                    "reason": classification.get("reason", "Tipo no reconocido"),
+                    "extracted_country": country
+                }
             }
-            
-            return response
             
         except Exception as e:
             logger.error(f"Error en routing con LangChain: {e}")

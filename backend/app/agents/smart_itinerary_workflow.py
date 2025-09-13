@@ -18,6 +18,7 @@ from .destination_selection_agent import destination_selection_agent
 from app.database import get_itineraries_collection
 from app.core.scheduler import TimeBudgetScheduler, TravelPlan
 from app.core.prompt_builder import PromptBuilder
+from app.services.daily_visits_service import daily_visits_service
 
 logger = logging.getLogger(__name__)
 
@@ -476,6 +477,19 @@ class SmartItineraryWorkflow:
         """
         try:
             logger.info(f"Procesando solicitud inteligente: {user_input}")
+            # Gating defensivo: no crear/modificar ante saludos o entradas vacías
+            lowered = (user_input or "").strip().lower()
+            greetings = {"hola", "hola!", "hola :)", "hi", "hello", "buenas", "buenos dias", "buenas tardes", "buenas noches"}
+            if lowered in greetings or len(lowered) <= 2:
+                return {
+                    "message": (
+                        "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? "
+                        "Dime país y duración (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía)."
+                    ),
+                    "is_user": False,
+                    "intention": "clarify",
+                    "workflow_state": {"step": "gated", "existing_itinerary": False}
+                }
             
             # Detectar itinerario existente
             existing_itinerary = await self.detection_agent.detect_existing_itinerary(user_id, travel_id)
@@ -506,13 +520,15 @@ class SmartItineraryWorkflow:
                         for city in cities_list
                     ])
                     
+                    total_cities = len(cities_list)
+                    plural = "ciudad" if total_cities == 1 else "ciudades"
                     response_message = f"""
 ¡Perfecto! He actualizado tu itinerario.
 
 🗺️ ITINERARIO ACTUALIZADO:
 {cities_text}
 
-Total: {len(cities_list)} ciudades
+Total: {total_cities} {plural}
 """
                 else:
                     response_message = modifications.get("message", "No se realizaron cambios en el itinerario.")
@@ -607,6 +623,12 @@ Total: {len(cities_list)} ciudades
                         logger.error("Error guardando itinerario en la BBDD")
                     
                     response_message = itinerary_text
+
+                    # Generar daily_visits para el viaje creado
+                    try:
+                        await daily_visits_service.generate_and_save_for_travel(travel_id)
+                    except Exception as e:
+                        logger.error(f"Error generating daily_visits: {e}")
             
             return {
                 "message": response_message,

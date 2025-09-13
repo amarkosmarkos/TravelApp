@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.chat_model import chat_model
+from app.services.chat_service import chat_service
 from app.utils.authentication import verify_jwt_token
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -96,40 +96,31 @@ async def chat(request: Request, token: str = Depends(verify_jwt_token)):
         print(f"Mensaje validado: {chat_request.message}")
         print(f"Historial validado: {chat_request.history}")
         
-        # Obtener configuración del viaje si existe
+        # Obtener usuario (email) y travel_id si vino en el payload
         user_email = verify_jwt_token(token)
-        travel_config = travel_setups.get(user_email, {})
-        
-        # Si hay configuración de viaje, incluirla en el contexto
-        if travel_config:
-            print(f"Configuración de viaje encontrada: {travel_config}")
-            # Añadir user_email a la configuración
-            travel_config["user_email"] = user_email
-        
-        # Convertir el historial al formato esperado por el modelo
-        chat_history = None
-        if chat_request.history:
-            chat_history = [{"role": msg.role, "content": msg.content} for msg in chat_request.history]
-        
-        # Generar respuesta con configuración de viaje si existe
-        response, updated_history = chat_model.generate_response(
-            chat_request.message, 
-            chat_history, 
-            travel_config if travel_config else None
+        travel_id = (travel_setups.get(user_email, {}) or {}).get("travel_id")
+        if not travel_id:
+            # Si no hay setup previo, generamos un travel_id efímero por compatibilidad
+            import uuid
+            travel_id = str(uuid.uuid4())
+
+        # Pasar por ChatService (con gating) para respuesta consistente
+        svc_response = await chat_service.process_message(
+            message=chat_request.message,
+            user_id=user_email,
+            travel_id=travel_id
         )
-        
-        # Convertir el historial actualizado al formato de respuesta
-        formatted_history = [
-            ChatMessage(role=msg["role"], content=msg["content"])
-            for msg in updated_history
+
+        # Reconstruir historial de respuesta: anexar user y assistant
+        updated_history = chat_request.history or []
+        updated_history = updated_history + [
+            ChatMessage(role="user", content=chat_request.message),
+            ChatMessage(role="assistant", content=svc_response.get("message", ""))
         ]
-        
-        print(f"Respuesta generada: {response}")
-        print(f"Historial actualizado: {formatted_history}")
-        
+
         return ChatResponse(
-            response=response,
-            history=formatted_history
+            response=svc_response.get("message", ""),
+            history=updated_history
         )
         
     except Exception as e:
