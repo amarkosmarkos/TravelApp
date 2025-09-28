@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, TextField, Button, Paper, Typography, CircularProgress, useTheme } from '@mui/material';
+import { Box, TextField, Button, Paper, Typography, CircularProgress, useTheme, Fade } from '@mui/material';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import SendIcon from '@mui/icons-material/Send';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 import TravelSetup from './TravelSetup';
 
 const ChatSection = ({ travelId }) => {
@@ -15,6 +16,7 @@ const ChatSection = ({ travelId }) => {
     const [error, setError] = useState(null);
     const [showTravelSetup, setShowTravelSetup] = useState(false);
     const [travelConfig, setTravelConfig] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
     const wsRef = useRef(null);
     const seenCorrelationIdsRef = useRef(new Set());
     const messagesEndRef = useRef(null);
@@ -31,12 +33,22 @@ const ChatSection = ({ travelId }) => {
         scrollToBottom();
     }, [messages]);
 
-    // Initialize chat cuando monta: carga historial y abre WS
+    // Initialize chat when mounting: load history and open WS
     useEffect(() => {
         if (travelId) {
             console.log('Initializing chat for travel:', travelId);
             loadChatHistory();
             connectWebSocket();
+            // Force TravelSetup if no config saved locally for this travel
+            const key = `travel-config-${travelId}`;
+            const saved = localStorage.getItem(key);
+            if (!saved) {
+                setShowTravelSetup(true);
+            } else {
+                try {
+                    setTravelConfig(JSON.parse(saved));
+                } catch {}
+            }
         }
     }, []); // Empty dependency array - only run once on mount
 
@@ -47,7 +59,7 @@ const ChatSection = ({ travelId }) => {
             // Clear current messages
             setMessages([]);
             setLoading(true);
-            // Reset deduplicación por correlation_id en cambio de viaje
+            // Reset correlation_id deduplication on travel change
             seenCorrelationIdsRef.current = new Set();
             // Update current travel reference
             currentTravelIdRef.current = travelId;
@@ -141,6 +153,7 @@ const ChatSection = ({ travelId }) => {
                                     correlation_id: cid
                                 };
                                 setMessages(prevMessages => [...prevMessages, assistantMessage]);
+                                setIsProcessing(false); // Desactivar estado de procesamiento cuando llega respuesta
                             }
                             scrollToBottom();
                         } else {
@@ -149,6 +162,7 @@ const ChatSection = ({ travelId }) => {
                     } else if (data.type === 'error') {
                         console.error('Error from server:', data.data);
                         setError(data.data.message || 'Error processing message');
+                        setIsProcessing(false); // Desactivar estado de procesamiento en caso de error
                     }
                 } catch (error) {
                     console.error('Error handling WebSocket message:', error);
@@ -258,6 +272,7 @@ const ChatSection = ({ travelId }) => {
             // Add message to local state immediately
             setMessages(prevMessages => [...prevMessages, userMessage]);
             setNewMessage('');
+            setIsProcessing(true); // Activar estado de procesamiento
 
             const correlationId = (window.crypto && window.crypto.randomUUID) 
                 ? window.crypto.randomUUID() 
@@ -282,6 +297,7 @@ const ChatSection = ({ travelId }) => {
         } catch (error) {
             console.error('Error sending message:', error);
             setError(error.message);
+            setIsProcessing(false); // Desactivar estado de procesamiento en caso de error
         }
     };
 
@@ -295,8 +311,20 @@ const ChatSection = ({ travelId }) => {
     const handleTravelSetupComplete = (config) => {
         setTravelConfig(config);
         setShowTravelSetup(false);
-        // Aquí podrías iniciar el chat con la configuración
-        console.log('Configuración de viaje completada:', config);
+        // Persistir config
+        try {
+            localStorage.setItem(`travel-config-${config.travel_id}`, JSON.stringify(config));
+        } catch {}
+        // Send automatic greeting
+        const greeting = `Welcome! I've registered your trip to ${config.country} for ${config.total_days} days (starting ${new Date(config.start_date).toLocaleDateString()}). I'm going to prepare a balanced route with variety of destinations. Any preferences (culture, nature, beach, pace)?`;
+        setMessages(prev => [...prev, {
+            id: `greet-${Date.now()}`,
+            content: greeting,
+            is_user: false,
+            timestamp: new Date().toISOString(),
+            user_id: 'assistant',
+            travel_id: config.travel_id
+        }]);
     };
 
     const handleTravelSetupCancel = () => {
@@ -315,13 +343,14 @@ const ChatSection = ({ travelId }) => {
         );
     }
 
-    // Mostrar TravelSetup si no hay configuración
+    // Show TravelSetup if no configuration
     if (showTravelSetup) {
         return (
             <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
                 <TravelSetup 
                     onSetupComplete={handleTravelSetupComplete}
                     onCancel={handleTravelSetupCancel}
+                    travelId={travelId}
                 />
             </Box>
         );
@@ -332,9 +361,23 @@ const ChatSection = ({ travelId }) => {
             display: 'flex', 
             flexDirection: 'column', 
             height: '100%',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '& @keyframes pulse': {
+                '0%': {
+                    opacity: 1,
+                    transform: 'scale(1)'
+                },
+                '50%': {
+                    opacity: 0.7,
+                    transform: 'scale(1.1)'
+                },
+                '100%': {
+                    opacity: 1,
+                    transform: 'scale(1)'
+                }
+            }
         }}>
-            {/* Header con botón de configuración */}
+            {/* Header with configuration button */}
             <Box sx={{ 
                 p: 2, 
                 background: 'rgba(255, 255, 255, 0.9)',
@@ -453,6 +496,56 @@ const ChatSection = ({ travelId }) => {
                         </Paper>
                     </Box>
                 ))}
+                
+                {/* Loading spinner when processing */}
+                {isProcessing && (
+                    <Fade in={isProcessing} timeout={300}>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                justifyContent: 'flex-start',
+                                mb: 2
+                            }}
+                        >
+                            <Paper
+                                elevation={2}
+                                sx={{
+                                    p: 2,
+                                    maxWidth: '70%',
+                                    background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                                    borderRadius: 3,
+                                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                                }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <PsychologyIcon sx={{ 
+                                        color: theme.palette.primary.main,
+                                        animation: 'pulse 1.5s ease-in-out infinite'
+                                    }} />
+                                    <Box>
+                                        <Typography variant="body2" sx={{ 
+                                            color: theme.palette.text.secondary,
+                                            fontStyle: 'italic'
+                                        }}>
+                                            The assistant is thinking...
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
+                                            <CircularProgress size={16} thickness={4} />
+                                            <Typography variant="caption" sx={{ 
+                                                color: theme.palette.text.secondary,
+                                                alignSelf: 'center',
+                                                ml: 1
+                                            }}>
+                                                Generando respuesta
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </Box>
+                            </Paper>
+                        </Box>
+                    </Fade>
+                )}
+                
                 <div ref={messagesEndRef} />
             </Paper>
 
@@ -471,8 +564,8 @@ const ChatSection = ({ travelId }) => {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="Type your message..."
-                    disabled={!connected}
+                    placeholder={isProcessing ? "The assistant is responding..." : "Type your message..."}
+                    disabled={!connected || isProcessing}
                     sx={{ 
                         '& .MuiOutlinedInput-root': {
                             background: 'rgba(255, 255, 255, 0.9)',
@@ -485,7 +578,7 @@ const ChatSection = ({ travelId }) => {
                     color="primary"
                     endIcon={<SendIcon />}
                     onClick={sendMessage}
-                    disabled={!connected || !newMessage.trim()}
+                    disabled={!connected || !newMessage.trim() || isProcessing}
                     sx={{
                         backgroundColor: theme.palette.primary.main,
                         '&:hover': {

@@ -14,11 +14,12 @@ import {
 import ChatIcon from '@mui/icons-material/Chat';
 import MapIcon from '@mui/icons-material/Map';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import PlaceIcon from '@mui/icons-material/Place';
+import HotelIcon from '@mui/icons-material/Hotel';
 import FlightIcon from '@mui/icons-material/Flight';
 import ChatSection from './ChatSection';
 import ItinerarySection from './ItinerarySection';
 import TravelList from './TravelList';
+import HotelsSection from './HotelsSection';
 
 const MainCanvas = () => {
     const [selectedItem, setSelectedItem] = useState('chat');
@@ -81,7 +82,7 @@ const MainCanvas = () => {
         { text: 'Chat', icon: <ChatIcon />, value: 'chat' },
         { text: 'Itinerary', icon: <MapIcon />, value: 'itinerary' },
         { text: 'Visits', icon: <LocationOnIcon />, value: 'visit' },
-        { text: 'Places', icon: <PlaceIcon />, value: 'places' },
+        { text: 'Hotels', icon: <HotelIcon />, value: 'hotels' },
         { text: 'Flights', icon: <FlightIcon />, value: 'flights' },
     ];
 
@@ -294,7 +295,39 @@ const MainCanvas = () => {
                 )}
 
                 {/* Other sections with modern design */}
-                {selectedItem !== 'chat' && selectedItem !== 'itinerary' && (
+                {selectedItem === 'hotels' && (
+                    <Box sx={{
+                        flex: 1,
+                        p: 3,
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: 3,
+                        m: 2,
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        {selectedTravel ? (
+                            <HotelsSection travelId={selectedTravel._id} />
+                        ) : (
+                            <Box sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '100%',
+                                textAlign: 'center'
+                            }}>
+                                <Typography variant="h5" sx={{ mb: 2, color: theme.palette.text.secondary }}>
+                                    No Trip Selected
+                                </Typography>
+                                <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
+                                    Please select a trip to view hotel suggestions.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+                )}
+
+                {selectedItem !== 'chat' && selectedItem !== 'itinerary' && selectedItem !== 'hotels' && (
                     <Box sx={{
                         flex: 1,
                         p: 3,
@@ -333,7 +366,7 @@ const MainCanvas = () => {
                                 fontSize: '1.1rem',
                                 maxWidth: 400
                             }}>
-                                This feature is coming soon. We're working hard to bring you the best travel planning experience.
+                                This feature is coming soon.
                             </Typography>
                         </Box>
                     </Box>

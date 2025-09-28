@@ -40,6 +40,7 @@ import jwt
 from jwt.exceptions import InvalidTokenError
 from app.config import settings
 from ..middleware.auth import get_current_user, verify_ws_token, verify_travel_access
+from app.services.hotel_suggestions_service import hotel_suggestions_service
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -1011,6 +1012,42 @@ async def get_available_sites(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error al obtener los sitios disponibles"
         ) 
+
+@router.get("/{travel_id}/hotels/suggestions")
+async def get_hotel_suggestions(
+    travel_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        travels = await get_travels_collection()
+        travel = await travels.find_one({"_id": ObjectId(travel_id)})
+        if travel is None:
+            raise HTTPException(status_code=404, detail="Travel not found")
+        if travel.get("user_id") != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized for this travel")
+
+        # Intentar servir desde BBDD primero
+        itineraries = await get_itineraries_collection()
+        it = await itineraries.find_one({"travel_id": travel_id})
+        if it and it.get("hotel_suggestions"):
+            return {"travel_id": travel_id, "suggestions": it.get("hotel_suggestions")}
+
+        # Si no hay, generar on-demand y devolver
+        suggestions = await hotel_suggestions_service.get_suggestions_for_travel(travel_id)
+        # Guardar asincrónicamente (no bloquear respuesta)
+        try:
+            await itineraries.update_one(
+                {"travel_id": travel_id},
+                {"$set": {"hotel_suggestions": suggestions, "hotel_suggestions_generated_at": datetime.utcnow().isoformat()}}
+            )
+        except Exception:
+            pass
+        return {"travel_id": travel_id, "suggestions": suggestions}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting hotel suggestions: {e}")
+        raise HTTPException(status_code=500, detail="Error getting hotel suggestions")
 
 @router.post("/country-code")
 async def get_country_code(

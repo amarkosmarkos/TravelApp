@@ -34,6 +34,7 @@ class TravelBase(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     destination: str
+    total_days: Optional[int] = None
     budget: Optional[float] = None
     status: str = "active"
 

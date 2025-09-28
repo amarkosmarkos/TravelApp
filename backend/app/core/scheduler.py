@@ -59,39 +59,32 @@ class TimeBudgetScheduler:
         Asigna tiempo a las ciudades basándose en scores y matriz de transporte.
         """
         try:
-            # 1. Reservar tiempo para llegada/salida
-            arrival_day_hours = 8  # primer día: llegada
-            departure_day_hours = 6  # último día: salida
-            reserved_hours = arrival_day_hours + departure_day_hours
-            
-            # 2. Calcular horas disponibles para exploración
-            available_explore_hours = self.total_hours - reserved_hours
-            
-            # 3. Calcular tiempo de transporte total
+            # 1. Calcular tiempo de transporte total
             total_transport_hours = self._calculate_total_transport_hours(
                 city_scores, transport_matrix
             )
             
-            # 4. Ajustar horas de exploración
-            available_explore_hours -= total_transport_hours
+            # 2. Usar TODOS los días disponibles para el viaje
+            total_available_days = self.total_hours / 24.0
+            transport_days = total_transport_hours / 24.0
+            available_explore_days = total_available_days - transport_days
             
-            if available_explore_hours <= 0:
-                logger.warning("Tiempo insuficiente para exploración")
-                available_explore_hours = max(0, available_explore_hours)
-            
-            # 5. Distribuir horas de exploración según scores
+            # 3. Distribuir días de exploración según scores
             total_score = sum(city.get("score", 1) for city in city_scores)
             visits = []
-            current_dt = self.start_dt + timedelta(hours=arrival_day_hours)
+            current_dt = self.start_dt
             
             for i, city in enumerate(city_scores):
-                # Calcular horas de estancia proporcionales al score
+                # Calcular días de estancia proporcionales al score
                 city_score = city.get("score", 1)
-                explore_hours = (city_score / total_score) * available_explore_hours
+                explore_days = (city_score / total_score) * available_explore_days
                 
-                # Mínimo 1 día de estancia
-                min_stay_hours = 24
-                stay_hours = max(min_stay_hours, int(explore_hours))
+                # Mínimo 1 día de estancia, redondear hacia arriba
+                min_stay_days = 1
+                stay_days = max(min_stay_days, int(explore_days + 0.5))  # Redondear
+                
+                # Convertir a horas para cálculos de fechas
+                stay_hours = stay_days * 24
                 
                 # Calcular transporte desde la ciudad anterior
                 transport_hours = 0
@@ -115,7 +108,8 @@ class TimeBudgetScheduler:
                         "type": city.get("type", ""),
                         "description": city.get("description", ""),
                         "latitude": city.get("latitude") or city.get("lat"),
-                        "longitude": city.get("longitude") or city.get("lon")
+                        "longitude": city.get("longitude") or city.get("lon"),
+                        "days": stay_days  # Añadir días para compatibilidad
                     }
                 )
                 
@@ -123,7 +117,7 @@ class TimeBudgetScheduler:
                 current_dt = departure_dt + timedelta(hours=transport_hours)
             
             # Calcular fechas finales
-            end_dt = current_dt + timedelta(hours=departure_day_hours)
+            end_dt = current_dt
             
             # Crear plan de viaje
             plan = TravelPlan(
@@ -139,8 +133,9 @@ class TimeBudgetScheduler:
             )
             
             logger.info(f"Plan creado: {len(visits)} ciudades, "
-                       f"{plan.total_explore_hours:.1f}h exploración, "
-                       f"{plan.total_travel_hours:.1f}h transporte")
+                       f"{plan.total_explore_hours/24:.1f} días exploración, "
+                       f"{plan.total_travel_hours/24:.1f} días transporte, "
+                       f"Total: {(plan.total_explore_hours + plan.total_travel_hours)/24:.1f} días")
             
             return plan
             

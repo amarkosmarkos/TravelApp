@@ -99,8 +99,19 @@ async def chat(request: Request, token: str = Depends(verify_jwt_token)):
         # Obtener usuario (email) y travel_id si vino en el payload
         user_email = verify_jwt_token(token)
         travel_id = (travel_setups.get(user_email, {}) or {}).get("travel_id")
+        # Si hay travel_id almacenado pero el documento fue borrado en Mongo, regenerar uno efímero
+        try:
+            from bson import ObjectId
+            from app.database import get_travels_collection
+            if travel_id:
+                travels = await get_travels_collection()
+                tr = await travels.find_one({"_id": ObjectId(travel_id)})
+                if not tr:
+                    travel_id = None
+        except Exception:
+            pass
         if not travel_id:
-            # Si no hay setup previo, generamos un travel_id efímero por compatibilidad
+            # Si no hay setup válido, generamos un travel_id efímero por compatibilidad
             import uuid
             travel_id = str(uuid.uuid4())
 

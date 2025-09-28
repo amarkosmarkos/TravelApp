@@ -16,7 +16,7 @@ import {
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-const TravelSetup = ({ onSetupComplete, onCancel }) => {
+const TravelSetup = ({ onSetupComplete, onCancel, travelId: existingTravelId = null }) => {
   const [formData, setFormData] = useState({
     start_date: '',
     total_days: 7,
@@ -42,46 +42,61 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
     setError('');
     
     try {
-      // Validar datos
+      // Validate data
       if (!formData.start_date || !formData.country) {
-        setError('Por favor completa todos los campos obligatorios');
+        setError('Please complete all required fields');
         return;
       }
 
-      // Convertir fecha a ISO
+      // Convert date to ISO
       const startDate = new Date(formData.start_date);
 
-      // El backend espera TravelCreate: { title, destination, start_date?, ... }
+      // Backend expects TravelCreate: { title, destination, start_date?, ... }
       const travelPayload = {
-        title: `Viaje a ${formData.country}`,
+        title: `Trip to ${formData.country}`,
         destination: formData.country,
-        start_date: startDate.toISOString()
+        start_date: startDate.toISOString(),
+        total_days: formData.total_days
       };
 
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/travels`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(travelPayload)
-      });
+      let response, travelId
+      if (existingTravelId) {
+        // Update existing trip with initial configuration
+        response = await fetch(`${API_URL}/api/travels/${existingTravelId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(travelPayload)
+        });
+      } else {
+        // Create new trip
+        response = await fetch(`${API_URL}/api/travels`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(travelPayload)
+        });
+      }
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Error al crear el viaje');
+        throw new Error(errData.detail || 'Error creating the trip');
       }
 
       const result = await response.json();
-      const travelId = result._id || result.id;
+      travelId = existingTravelId || result._id || result.id;
       if (!travelId) {
-        throw new Error('No se pudo obtener el ID del viaje');
+        throw new Error('Could not get trip ID');
       }
 
       setShowSuccess(true);
 
-      // Devolver al padre los datos de setup y el ID creado
+      // Return setup data and created ID to parent
       onSetupComplete({
         start_date: travelPayload.start_date,
         total_days: formData.total_days,
@@ -92,8 +107,8 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
         travel_id: travelId
       });
     } catch (error) {
-      console.error('Error en setup:', error);
-      setError(error.message || 'No se pudo guardar la configuración del viaje');
+      console.error('Error in setup:', error);
+      setError(error.message || 'Could not save trip configuration');
     } finally {
       setIsLoading(false);
     }
@@ -112,18 +127,18 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
         }}
       >
         <Typography variant="h4" component="h1" gutterBottom align="center" color="primary">
-          Configura tu Viaje
+          Configure Your Trip
         </Typography>
         
         <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
-          Cuéntanos sobre tu próximo viaje para crear un itinerario perfecto
+          Tell us about your next trip to create a perfect itinerary
         </Typography>
 
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Fecha de inicio"
+              label="Start Date"
               type="date"
               value={formData.start_date}
               onChange={(e) => handleInputChange('start_date', e.target.value)}
@@ -140,7 +155,7 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Duración del viaje (días)"
+              label="Trip Duration (days)"
               type="number"
               value={formData.total_days}
               onChange={(e) => handleInputChange('total_days', parseInt(e.target.value))}
@@ -151,20 +166,13 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
 
           <Grid item xs={12}>
             <FormControl fullWidth required>
-              <InputLabel>País de destino</InputLabel>
+              <InputLabel>Destination Country</InputLabel>
               <Select
                 value={formData.country}
                 onChange={(e) => handleInputChange('country', e.target.value)}
-                label="País de destino"
+                label="Destination Country"
               >
-                <MenuItem value="thailand">Tailandia</MenuItem>
-                <MenuItem value="japan">Japón</MenuItem>
-                <MenuItem value="spain">España</MenuItem>
-                <MenuItem value="france">Francia</MenuItem>
-                <MenuItem value="italy">Italia</MenuItem>
-                <MenuItem value="germany">Alemania</MenuItem>
-                <MenuItem value="uk">Reino Unido</MenuItem>
-                <MenuItem value="usa">Estados Unidos</MenuItem>
+                <MenuItem value="thailand">Thailand</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -172,7 +180,7 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
           <Grid item xs={12}>
             <TextField
               fullWidth
-              label="Ciudad de origen"
+              label="Origin City"
               placeholder="Madrid, Barcelona, etc."
               value={formData.origin_city}
               onChange={(e) => handleInputChange('origin_city', e.target.value)}
@@ -181,16 +189,16 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
 
           <Grid item xs={12}>
             <FormControl fullWidth>
-              <InputLabel>Tipo de viaje</InputLabel>
+              <InputLabel>Trip Type</InputLabel>
               <Select
                 value={formData.companions}
                 onChange={(e) => handleInputChange('companions', e.target.value)}
-                label="Tipo de viaje"
+                label="Trip Type"
               >
                 <MenuItem value="solo">Solo</MenuItem>
-                <MenuItem value="pareja">Pareja</MenuItem>
-                <MenuItem value="familia">Familia</MenuItem>
-                <MenuItem value="amigos">Amigos</MenuItem>
+                <MenuItem value="pareja">Couple</MenuItem>
+                <MenuItem value="familia">Family</MenuItem>
+                <MenuItem value="amigos">Friends</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -204,7 +212,7 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
                 size="large"
                 sx={{ px: 4 }}
               >
-                {isLoading ? 'Guardando...' : 'Configurar Viaje'}
+                {isLoading ? 'Saving...' : 'Configure Trip'}
               </Button>
               
               <Button
@@ -213,7 +221,7 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
                 size="large"
                 sx={{ px: 4 }}
               >
-                Cancelar
+                Cancel
               </Button>
             </Box>
           </Grid>
@@ -236,7 +244,7 @@ const TravelSetup = ({ onSetupComplete, onCancel }) => {
         onClose={() => setShowSuccess(false)}
       >
         <Alert severity="success" onClose={() => setShowSuccess(false)}>
-          Configuración guardada exitosamente
+          Configuration saved successfully
         </Alert>
       </Snackbar>
     </Box>

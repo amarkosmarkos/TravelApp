@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_DEPLOYMENT_NAME: str
+    # Azure Language (CLU) opcional
+    AZURE_LANGUAGE_ENDPOINT: Optional[str] = None
+    AZURE_LANGUAGE_KEY: Optional[str] = None
+    AZURE_LANGUAGE_PROJECT: Optional[str] = None
+    AZURE_LANGUAGE_DEPLOYMENT: Optional[str] = None
     
     # API settings
     API_V1_STR: str = "/api"

@@ -26,10 +26,12 @@ class ItineraryDetectionAgent:
             itineraries_collection = await get_itineraries_collection()
             
             # Buscar itinerario existente
-            existing_itinerary = await itineraries_collection.find_one({
-                "travel_id": travel_id,
-                "user_id": user_id
-            })
+            # Detectar por travel_id. Si hay múltiples, tomar el más reciente
+            cursor = itineraries_collection.find({
+                "travel_id": travel_id
+            }).sort("updated_at", -1)
+            results = await cursor.to_list(length=1)
+            existing_itinerary = results[0] if results else None
             
             if existing_itinerary:
                 # Obtener items del itinerario

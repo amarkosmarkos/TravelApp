@@ -1,41 +1,41 @@
-# Opciones de Mapa para el Itinerario
+# Map Options for Itinerary
 
-## 🗺️ Estado Actual
+## 🗺️ Current Status
 
-He mejorado significativamente el mapa con las siguientes características:
+I have significantly improved the map with the following features:
 
-### ✅ Mejoras Implementadas
+### ✅ Implemented Improvements
 
-1. **MapView.js** - Versión mejorada con:
-   - Fondo de mapa más realista con gradientes y patrones
-   - Marcadores interactivos con efectos de pulso
-   - Líneas de conexión entre ciudades
-   - Controles de mapa funcionales
-   - Estados de carga con progreso
-   - Leyenda y escala del mapa
-   - Animaciones suaves
+1. **MapView.js** - Enhanced version with:
+   - More realistic map background with gradients and patterns
+   - Interactive markers with pulse effects
+   - Connection lines between cities
+   - Functional map controls
+   - Loading states with progress
+   - Map legend and scale
+   - Smooth animations
 
-2. **MapViewLeaflet.js** - Versión preparada para mapa real:
-   - Placeholder para integración con Leaflet
-   - Instrucciones de instalación
-   - Misma funcionalidad visual que MapView.js
+2. **MapViewLeaflet.js** - Version prepared for real map:
+   - Placeholder for Leaflet integration
+   - Installation instructions
+   - Same visual functionality as MapView.js
 
-## 🚀 Opciones para Mejorar el Mapa
+## 🚀 Options to Improve the Map
 
-### Opción 1: Mapa Real con Leaflet (Recomendado)
+### Option 1: Real Map with Leaflet (Recommended)
 
-**Ventajas:**
-- Gratuito y de código abierto
-- Muy popular y bien documentado
-- Múltiples proveedores de tiles
-- Interactivo y responsivo
+**Advantages:**
+- Free and open source
+- Very popular and well documented
+- Multiple tile providers
+- Interactive and responsive
 
-**Instalación:**
+**Installation:**
 ```bash
 npm install leaflet react-leaflet
 ```
 
-**Implementación:**
+**Implementation:**
 ```javascript
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -60,19 +60,19 @@ import 'leaflet/dist/leaflet.css';
 </MapContainer>
 ```
 
-### Opción 2: Google Maps
+### Option 2: Google Maps
 
-**Ventajas:**
-- Muy familiar para los usuarios
-- Excelente calidad de mapas
-- Muchas funcionalidades avanzadas
+**Advantages:**
+- Very familiar to users
+- Excellent map quality
+- Many advanced features
 
-**Instalación:**
+**Installation:**
 ```bash
 npm install @googlemaps/js-api-loader
 ```
 
-**Implementación:**
+**Implementation:**
 ```javascript
 import { Loader } from '@googlemaps/js-api-loader';
 
@@ -81,74 +81,74 @@ const loader = new Loader({
   version: "weekly"
 });
 
-// Cargar Google Maps y crear el mapa
+// Load Google Maps and create the map
 ```
 
-### Opción 3: Mapbox
+### Option 3: Mapbox
 
-**Ventajas:**
-- Mapas muy personalizables
-- Excelente rendimiento
-- Herramientas de diseño avanzadas
+**Advantages:**
+- Highly customizable maps
+- Excellent performance
+- Advanced design tools
 
-**Instalación:**
+**Installation:**
 ```bash
 npm install mapbox-gl react-map-gl
 ```
 
-## 🎨 Personalización Visual
+## 🎨 Visual Customization
 
-### Temas de Mapa Disponibles
+### Available Map Themes
 
-1. **OpenStreetMap** (Gratuito)
-   - Estilo estándar
-   - Datos de OpenStreetMap
+1. **OpenStreetMap** (Free)
+   - Standard style
+   - OpenStreetMap data
 
-2. **CartoDB** (Gratuito)
-   - Estilo limpio y moderno
-   - Colores suaves
+2. **CartoDB** (Free)
+   - Clean and modern style
+   - Soft colors
 
-3. **Stamen** (Gratuito)
-   - Estilo artístico
-   - Múltiples variantes
+3. **Stamen** (Free)
+   - Artistic style
+   - Multiple variants
 
-4. **Google Maps** (De pago)
-   - Estilo familiar
-   - Múltiples tipos de mapa
+4. **Google Maps** (Paid)
+   - Familiar style
+   - Multiple map types
 
-## 🔧 Funcionalidades Adicionales
+## 🔧 Additional Features
 
-### Para Implementar:
+### To Implement:
 
-1. **Rutas entre ciudades:**
-   - Mostrar líneas de ruta
-   - Calcular distancias
-   - Tiempo estimado de viaje
+1. **Routes between cities:**
+   - Show route lines
+   - Calculate distances
+   - Estimated travel time
 
-2. **Información del clima:**
-   - Iconos de clima en marcadores
-   - Temperatura actual
-   - Pronóstico
+2. **Weather information:**
+   - Weather icons on markers
+   - Current temperature
+   - Forecast
 
-3. **Fotos de ciudades:**
-   - Miniaturas en marcadores
-   - Galería de fotos
-   - Información turística
+3. **City photos:**
+   - Thumbnails on markers
+   - Photo gallery
+   - Tourist information
 
-4. **Filtros y búsqueda:**
-   - Filtrar por tipo de ciudad
-   - Búsqueda por nombre
-   - Ordenar por distancia
+4. **Filters and search:**
+   - Filter by city type
+   - Search by name
+   - Sort by distance
 
-## 📱 Responsividad
+## 📱 Responsiveness
 
-El mapa actual es responsivo, pero se puede mejorar:
+The current map is responsive, but can be improved:
 
 ```javascript
-// Para dispositivos móviles
+// For mobile devices
 const isMobile = window.innerWidth < 768;
 
-// Layout adaptativo
+// Adaptive layout
 <Box sx={{ 
   display: 'flex', 
   flexDirection: isMobile ? 'column' : 'row',
@@ -163,10 +163,10 @@ const isMobile = window.innerWidth < 768;
 </Box>
 ```
 
-## 🎯 Recomendación
+## 🎯 Recommendation
 
-**Para implementar ahora:** Usar la versión mejorada de `MapView.js` que ya está funcionando.
+**To implement now:** Use the enhanced version of `MapView.js` that is already working.
 
-**Para el futuro:** Migrar a Leaflet para un mapa real e interactivo.
+**For the future:** Migrate to Leaflet for a real and interactive map.
 
-¿Te gustaría que implemente alguna de estas opciones específicas? 
+Would you like me to implement any of these specific options? 

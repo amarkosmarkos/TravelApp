@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 from app.database import get_messages_collection, get_itineraries_collection
 from app.models.travel import ChatMessageCreate, Message
+from bson import ObjectId
 from app.agents.smart_itinerary_workflow import SmartItineraryWorkflow
 from app.agents.message_router import MessageRouter, MessageType
 
@@ -58,18 +59,98 @@ class ChatService:
             
             # Guardar mensaje del usuario
             await self._save_user_message(message, user_id, travel_id)
-            
-            # Clasificar intención (gating)
-            classification = await self.message_router.classify_message(message)
+
+            # Verificación temprana: si el viaje no existe (fue borrado), informar y pedir nueva configuración
+            try:
+                from app.database import get_travels_collection
+                from bson import ObjectId
+                travels = await get_travels_collection()
+                tr_exists = await travels.find_one({"_id": ObjectId(travel_id)})
+                if not tr_exists:
+                    assistant_message = (
+                        "No encuentro la configuración de este viaje (posiblemente fue borrado). "
+                        "Indícame el país y la duración (por ejemplo, 14 días) para crear uno nuevo, "
+                        "o vuelve a realizar la configuración inicial."
+                    )
+                    await self._save_assistant_message(assistant_message, user_id, travel_id)
+                    return {
+                        "message": assistant_message,
+                        "is_user": False,
+                        "intention": "clarify",
+                        "classification": {
+                            "type": "clarify",
+                            "confidence": 1.0,
+                            "reason": "travel_not_found",
+                            "extracted_country": ""
+                        },
+                        "travel_id": travel_id,
+                        "user_id": user_id
+                    }
+            except Exception as e:
+                logger.warning(f"No se pudo verificar existencia del viaje {travel_id}: {e}")
+
+            # Construir contexto del travel para clasificación inteligente
+            travel_ctx = {}
+            try:
+                from app.database import get_travels_collection, get_itineraries_collection
+                travels = await get_travels_collection()
+                itineraries = await get_itineraries_collection()
+                tr = await travels.find_one({"_id": ObjectId(travel_id)})
+                it = await itineraries.find_one({"travel_id": travel_id})
+                if tr:
+                    travel_ctx = {
+                        "travel_id": travel_id,
+                        "country": tr.get("country") or tr.get("destination"),
+                        "total_days": tr.get("total_days"),
+                        "has_setup": bool((tr.get("country") or tr.get("destination")) and tr.get("total_days")),
+                        "has_itinerary": bool(it is not None)
+                    }
+            except Exception as e:
+                logger.warning(f"No se pudo construir travel context: {e}")
+
+            # Clasificar intención (gating) con function calling
+            classification = await self.message_router.classify_message(message, context=travel_ctx)
             message_type = classification.get("type", MessageType.GENERAL_CHAT)
             confidence = classification.get("confidence", 0.0)
-            country = self._extract_country_from_message(message) or "thailand"
+            # Prefer country/total_days from classification/tools o contexto
+            country = classification.get("extracted_country") or travel_ctx.get("country") or self._extract_country_from_message(message) or "thailand"
+            extracted_days = classification.get("total_days")
 
             # Umbral para acciones automáticas
             auto_threshold = 0.75
 
             # Si es chat general o confianza baja, pedir aclaración y no crear nada
+            # EXCEPTO si hay TravelSetup guardado y el mensaje es preferencias: disparamos CREATE_ITINERARY
             if (message_type == MessageType.GENERAL_CHAT) or (confidence < auto_threshold and message_type not in (MessageType.CREATE_ITINERARY, MessageType.MODIFY_ITINERARY)):
+                try:
+                    # Comprobar configuración del travel
+                    from app.database import get_travels_collection
+                    travels = await get_travels_collection()
+                    tr = await travels.find_one({"_id": ObjectId(travel_id)})
+                    if tr and (tr.get("destination") or tr.get("country")) and (tr.get("total_days")):
+                        # Tratar como preferencias y crear itinerario
+                        logger.info("Preferencias detectadas con TravelSetup presente. Disparando creación de itinerario.")
+                        country_eff = (tr.get("country") or tr.get("destination") or country)
+                        total_days = int(extracted_days or tr.get("total_days") or 7)
+                        response = await self.smart_workflow.process_smart_request(
+                            user_input=message,
+                            user_id=user_id,
+                            travel_id=travel_id,
+                            country=country_eff
+                        )
+                        assistant_message = response.get("message", "Itinerario creado.")
+                        await self._save_assistant_message(assistant_message, user_id, travel_id)
+                        logger.info(f"Itinerario disparado por preferencias. country={country_eff}, total_days={total_days}")
+                        return {
+                            "message": assistant_message,
+                            "is_user": False,
+                            "intention": response.get("intention", "itinerary_created"),
+                            "classification": classification,
+                            "travel_id": travel_id,
+                            "user_id": user_id
+                        }
+                except Exception as e:
+                    logger.warning(f"Fallo al disparar por preferencias con TravelSetup: {e}")
                 assistant_message = (
                     "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? "
                     "Dime país y duración (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía)."

@@ -51,7 +51,7 @@ body {
   background: #8a7a6d;
 }
 
-/* Mejoras para dispositivos móviles */
+/* Improvements for mobile devices */
 @media (max-width: 768px) {
   body {
     font-size: 14px;

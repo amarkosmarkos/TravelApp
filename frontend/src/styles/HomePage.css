@@ -20,7 +20,7 @@ html {
     scroll-behavior: smooth;
 }
 
-/* Animación fadeInUp */
+/* fadeInUp animation */
 @keyframes fadeInUp {
     from {
         opacity: 0;
@@ -32,12 +32,12 @@ html {
     }
 }
 
-/* Animación para elementos que aparecen con delay */
+/* Animation for elements that appear with delay */
 .fadeInUp {
     animation: fadeInUp 1s ease-out;
 }
 
-/* Mejoras para dispositivos móviles */
+/* Improvements for mobile devices */
 @media (max-width: 768px) {
     .home-container {
         padding: 0;

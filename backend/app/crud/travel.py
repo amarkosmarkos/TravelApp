@@ -15,6 +15,8 @@ from ..database import (
 )
 from ..models.travel import TravelCreate, Travel, ChatCreate, Chat, ChatMessageCreate, ChatMessage, ItineraryCreate, Itinerary, VisitCreate, Visit, PlaceCreate, Place, FlightCreate, Flight, TravelUpdate, Message, MessageCreate
 from app.services.daily_visits_service import daily_visits_service
+from app.services.hotel_suggestions_service import hotel_suggestions_service
+import asyncio
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import logging
 
@@ -177,6 +179,11 @@ async def create_or_update_itinerary(itinerary: ItineraryCreate) -> Itinerary:
             await daily_visits_service.generate_and_save_for_travel(travel_id)
         except Exception as e:
             logger.error(f"Error generating daily_visits after update: {e}")
+        # Disparar generación automática de hotel_suggestions en background (no bloqueante)
+        try:
+            asyncio.create_task(hotel_suggestions_service.generate_and_save_for_travel(travel_id))
+        except Exception as e:
+            logger.error(f"Error scheduling hotel_suggestions after update: {e}")
         return Itinerary(**updated)
     else:
         # Crear nuevo itinerario
@@ -188,6 +195,11 @@ async def create_or_update_itinerary(itinerary: ItineraryCreate) -> Itinerary:
             await daily_visits_service.generate_and_save_for_travel(travel_id)
         except Exception as e:
             logger.error(f"Error generating daily_visits after create: {e}")
+        # Disparar generación automática de hotel_suggestions en background (no bloqueante)
+        try:
+            asyncio.create_task(hotel_suggestions_service.generate_and_save_for_travel(travel_id))
+        except Exception as e:
+            logger.error(f"Error scheduling hotel_suggestions after create: {e}")
         return Itinerary(**created)
 
 # Visit operations

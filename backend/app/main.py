@@ -2,6 +2,9 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.routers import auth, travel, users
+from app.services.hotel_suggestions_service import hotel_suggestions_service
+from app.database import get_itineraries_collection
+import asyncio
 from app.middleware.security import security_middleware, login_attempt_middleware
 from app.config import settings
 from app.database import connect_to_mongodb, close_mongodb_connection
@@ -75,6 +78,32 @@ async def startup_event():
     logger.info("Iniciando aplicación...")
     await connect_to_mongodb()
     logger.info("Aplicación iniciada correctamente")
+    # Tarea periódica: rellenar hotel_suggestions faltantes
+    async def _periodic_fill_hotels():
+        while True:
+            try:
+                itineraries = await get_itineraries_collection()
+                cursor = itineraries.find({
+                    "$or": [
+                        {"hotel_suggestions": {"$exists": False}},
+                        {"hotel_suggestions": {"$size": 0}}
+                    ]
+                }).limit(5)
+                async for it in cursor:
+                    travel_id = it.get("travel_id")
+                    if travel_id:
+                        try:
+                            await hotel_suggestions_service.generate_and_save_for_travel(travel_id)
+                        except Exception as e:
+                            logger.error(f"Periodic hotels generation error for {travel_id}: {e}")
+            except Exception as e:
+                logger.error(f"Periodic hotels scan failed: {e}")
+            await asyncio.sleep(60)  # cada 60s
+
+    try:
+        asyncio.create_task(_periodic_fill_hotels())
+    except Exception as e:
+        logger.error(f"Error scheduling periodic hotels task: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():

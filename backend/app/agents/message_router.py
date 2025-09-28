@@ -1,5 +1,5 @@
 """
-Router central que decide qué hacer con cada mensaje del usuario.
+Central router that decides what to do with each user message.
 """
 
 from typing import Dict, Any, List
@@ -7,11 +7,12 @@ from enum import Enum
 import logging
 from openai import AzureOpenAI
 from app.config import settings
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
 class MessageType(Enum):
-    """Tipos de mensajes que puede procesar el sistema."""
+    """Types of messages that the system can process."""
     CREATE_ITINERARY = "create_itinerary"
     MODIFY_ITINERARY = "modify_itinerary"
     SEARCH_CITIES = "search_cities"
@@ -21,7 +22,7 @@ class MessageType(Enum):
 
 class MessageRouter:
     """
-    Router central que clasifica y dirige mensajes a los agentes correctos.
+    Central router that classifies and directs messages to the correct agents.
     """
     
     def __init__(self):
@@ -34,26 +35,87 @@ class MessageRouter:
     
     async def classify_message(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Clasifica el mensaje del usuario y determina qué acción tomar.
+        Classifies the user message and determines what action to take.
         """
         try:
-            # Análisis rápido con keywords
+            # 0) Try with Azure Language (CLU) if configured
+            clu_result = await self._clu_classification(message, context)
+            if clu_result and clu_result.get("confidence", 0) >= 0.8:
+                return clu_result
+            # Quick analysis with keywords
             quick_analysis = self._quick_classification(message)
             
-            # Si es claro, usar clasificación rápida
+            # If clear, use quick classification
             if quick_analysis["confidence"] > 0.8:
                 return quick_analysis
             
-            # Si no es claro, usar AI para clasificar
+            # If not clear, use AI with function calling (tools)
+            tool_cls = await self._tool_classification(message, context)
+            if tool_cls:
+                return tool_cls
+            # Fallback to simple AI classification
             return await self._ai_classification(message, context)
             
         except Exception as e:
-            logger.error(f"Error clasificando mensaje: {e}")
+            logger.error(f"Error classifying message: {e}")
             return {
                 "type": MessageType.GENERAL_CHAT,
                 "confidence": 0.5,
-                "reason": "Error en clasificación"
+                "reason": "Classification error"
             }
+
+    async def _clu_classification(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any] | None:
+        """
+        Usa Azure Language (Conversational Language Understanding) si hay credenciales.
+        Devuelve dict con type y confidence o None si no aplica.
+        """
+        try:
+            if not (settings.AZURE_LANGUAGE_ENDPOINT and settings.AZURE_LANGUAGE_KEY and settings.AZURE_LANGUAGE_PROJECT and settings.AZURE_LANGUAGE_DEPLOYMENT):
+                return None
+            url = f"{settings.AZURE_LANGUAGE_ENDPOINT.rstrip('/')}/language/:analyze-conversations?api-version=2023-04-01"
+            payload = {
+                "kind": "Conversation",
+                "analysisInput": {
+                    "conversationItem": {
+                        "id": "1",
+                        "participantId": "user",
+                        "text": message
+                    },
+                    "isLoggingEnabled": False
+                },
+                "parameters": {
+                    "projectName": settings.AZURE_LANGUAGE_PROJECT,
+                    "deploymentName": settings.AZURE_LANGUAGE_DEPLOYMENT,
+                    "verbose": False
+                }
+            }
+            headers = {"Ocp-Apim-Subscription-Key": settings.AZURE_LANGUAGE_KEY, "Content-Type": "application/json"}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers) as r:
+                    if r.status != 200:
+                        return None
+                    data = await r.json()
+            # Parse CLU top intent
+            top = (data.get("result") or {}).get("prediction", {}).get("topIntent")
+            score_map = (data.get("result") or {}).get("prediction", {}).get("intents", [])
+            score = 0.0
+            for it in score_map:
+                if it.get("category") == top:
+                    score = float(it.get("confidenceScore", 0))
+                    break
+            mapping = {
+                "CREATE_ITINERARY": MessageType.CREATE_ITINERARY,
+                "MODIFY_ITINERARY": MessageType.MODIFY_ITINERARY,
+                "SEARCH_CITIES": MessageType.SEARCH_CITIES,
+                "OPTIMIZE_ROUTE": MessageType.OPTIMIZE_ROUTE,
+                "GENERAL_CHAT": MessageType.GENERAL_CHAT,
+                "PREFERENCES": MessageType.GENERAL_CHAT
+            }
+            mtype = mapping.get(top, MessageType.GENERAL_CHAT)
+            return {"type": mtype, "confidence": score, "reason": f"CLU:{top}"}
+        except Exception as e:
+            logger.warning(f"CLU classification failed: {e}")
+            return None
     
     def _quick_classification(self, message: str) -> Dict[str, Any]:
         """
@@ -176,6 +238,96 @@ Responde SOLO con el tipo en mayúsculas (ej: CREATE_ITINERARY)
                 "confidence": 0.5,
                 "reason": "Error en clasificación AI"
             }
+
+    async def _tool_classification(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any] | None:
+        """
+        Clasificación usando function calling para obtener intent y slots estructurados.
+        Devuelve dict con type, confidence, reason, extracted_country, total_days, preferences si tiene éxito.
+        """
+        try:
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "route_intent",
+                        "description": "Clasifica la intención del usuario y extrae slots relevantes",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "intent": {
+                                    "type": "string",
+                                    "enum": [
+                                        "CREATE_ITINERARY", "MODIFY_ITINERARY",
+                                        "PREFERENCES", "SEARCH_CITIES",
+                                        "OPTIMIZE_ROUTE", "GENERAL_CHAT"
+                                    ]
+                                },
+                                "country": {"type": "string"},
+                                "total_days": {"type": "integer"},
+                                "preferences": {"type": "array", "items": {"type": "string"}}
+                            },
+                            "required": ["intent"]
+                        }
+                    }
+                }
+            ]
+
+            sys = "Eres un router de mensajes. Invoca la función con la intención y slots."
+            ctx_txt = f"CONTEXTO: {context or {}}"
+            resp = self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=[
+                    {"role": "system", "content": sys},
+                    {"role": "user", "content": f"MENSAJE: {message}\n{ctx_txt}"}
+                ],
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.1,
+                max_tokens=300
+            )
+
+            choice = resp.choices[0]
+            msg = choice.message
+            import json
+            # Modo tools (OpenAI/Azure moderno)
+            tool_calls = getattr(msg, "tool_calls", None)
+            args = None
+            if tool_calls and len(tool_calls) > 0:
+                call = tool_calls[0]
+                fn_name = getattr(call.function, "name", None)
+                if fn_name == "route_intent":
+                    args = json.loads(getattr(call.function, "arguments", "{}") or "{}")
+            # Fallback a function_call (APIs antiguos)
+            if args is None:
+                fn_call = getattr(msg, "function_call", None)
+                if fn_call and getattr(fn_call, "name", None) == "route_intent":
+                    args = json.loads(getattr(fn_call, "arguments", "{}") or "{}")
+            if args is None:
+                return None
+            intent = args.get("intent", "GENERAL_CHAT")
+            country = args.get("country")
+            total_days = args.get("total_days")
+            preferences = args.get("preferences") or []
+
+            type_mapping = {
+                "CREATE_ITINERARY": MessageType.CREATE_ITINERARY,
+                "MODIFY_ITINERARY": MessageType.MODIFY_ITINERARY,
+                "SEARCH_CITIES": MessageType.SEARCH_CITIES,
+                "OPTIMIZE_ROUTE": MessageType.OPTIMIZE_ROUTE,
+                "PREFERENCES": MessageType.GENERAL_CHAT,  # se eleva a CREATE en capa superior si hay config
+                "GENERAL_CHAT": MessageType.GENERAL_CHAT
+            }
+            return {
+                "type": type_mapping.get(intent, MessageType.GENERAL_CHAT),
+                "confidence": 0.85,
+                "reason": f"tool_call:{intent}",
+                "extracted_country": country,
+                "total_days": total_days,
+                "preferences": preferences
+            }
+        except Exception as e:
+            logger.warning(f"Tool classification failed: {e}")
+            return None
     
     async def _extract_country_from_message(self, message: str) -> str:
         """

@@ -1,5 +1,5 @@
 """
-Flujo completo de gestión inteligente de itinerarios usando LangGraph.
+Complete intelligent itinerary management workflow using LangGraph.
 """
 
 from typing import Dict, Any, List, TypedDict, Annotated
@@ -15,16 +15,19 @@ from .database_agent import DatabaseAgent
 from .routing_agent import RoutingAgent
 from .itinerary_agent import ItineraryAgent
 from .destination_selection_agent import destination_selection_agent
-from app.database import get_itineraries_collection
+from app.database import get_itineraries_collection, get_travels_collection
+from bson import ObjectId
 from app.core.scheduler import TimeBudgetScheduler, TravelPlan
 from app.core.prompt_builder import PromptBuilder
 from app.services.daily_visits_service import daily_visits_service
+from app.services.hotel_suggestions_service import hotel_suggestions_service
+import asyncio
 
 logger = logging.getLogger(__name__)
 
-# Estado del flujo inteligente
+# Smart workflow state
 class SmartItineraryState(TypedDict):
-    """Estado del flujo de gestión inteligente de itinerarios."""
+    """State of the intelligent itinerary management workflow."""
     messages: Annotated[List[HumanMessage | AIMessage], "add"]
     user_input: str
     user_id: str
@@ -40,7 +43,7 @@ class SmartItineraryState(TypedDict):
 
 class SmartItineraryWorkflow:
     """
-    Flujo completo de gestión inteligente de itinerarios.
+    Complete intelligent itinerary management workflow.
     """
     
     def __init__(self):
@@ -50,17 +53,17 @@ class SmartItineraryWorkflow:
         self.routing_agent = RoutingAgent()
         self.itinerary_agent = ItineraryAgent()
         
-        # Crear el grafo
+        # Create the graph
         self.workflow = self._create_smart_workflow()
     
     def _create_smart_workflow(self) -> StateGraph:
         """
-        Crea el grafo de flujo inteligente.
+        Creates the smart workflow graph.
         """
-        # Crear el grafo
+        # Create the graph
         workflow = StateGraph(SmartItineraryState)
         
-        # Agregar nodos
+        # Add nodes
         workflow.add_node("detect_itinerary", self._detect_itinerary)
         workflow.add_node("analyze_request", self._analyze_request)
         workflow.add_node("get_available_sites", self._get_available_sites)
@@ -70,10 +73,10 @@ class SmartItineraryWorkflow:
         workflow.add_node("generate_response", self._generate_response)
         workflow.add_node("handle_error", self._handle_error)
         
-        # Definir el flujo
+        # Define the flow
         workflow.set_entry_point("detect_itinerary")
         
-        # Flujo principal
+        # Main flow
         workflow.add_edge("detect_itinerary", "analyze_request")
         workflow.add_edge("analyze_request", "get_available_sites")
         workflow.add_edge("get_available_sites", "suggest_modifications")
@@ -81,11 +84,11 @@ class SmartItineraryWorkflow:
         workflow.add_edge("apply_modifications", "generate_response")
         workflow.add_edge("generate_response", END)
         
-        # Flujo alternativo para nuevos itinerarios
+        # Alternative flow for new itineraries
         workflow.add_edge("detect_itinerary", "create_new_itinerary")
         workflow.add_edge("create_new_itinerary", "generate_response")
         
-        # Manejo de errores
+        # Error handling
         workflow.add_edge("detect_itinerary", "handle_error")
         workflow.add_edge("analyze_request", "handle_error")
         workflow.add_edge("get_available_sites", "handle_error")
@@ -94,17 +97,17 @@ class SmartItineraryWorkflow:
         workflow.add_edge("create_new_itinerary", "handle_error")
         workflow.add_edge("handle_error", END)
         
-        # Compilar el grafo
+        # Compile the graph
         return workflow.compile()
     
     async def _detect_itinerary(self, state: SmartItineraryState) -> SmartItineraryState:
         """
-        Detecta si existe un itinerario para el viaje.
+        Detects if an itinerary exists for the trip.
         """
         try:
             state["step"] = "detect_itinerary"
             
-            # Detectar itinerario existente
+            # Detect existing itinerary
             existing_itinerary = await self.detection_agent.detect_existing_itinerary(
                 state["user_id"], 
                 state["travel_id"]
@@ -112,25 +115,25 @@ class SmartItineraryWorkflow:
             
             state["existing_itinerary"] = existing_itinerary
             
-            # Agregar mensaje del sistema
+            # Add system message
             if existing_itinerary.get("exists"):
                 state["messages"].append(
-                    AIMessage(content=f"Itinerario existente detectado con {existing_itinerary['total_items']} ciudades")
+                    AIMessage(content=f"Existing itinerary detected with {existing_itinerary['total_items']} cities")
                 )
             else:
                 state["messages"].append(
-                    AIMessage(content="No se encontró itinerario existente, creando uno nuevo")
+                    AIMessage(content="No existing itinerary found, creating a new one")
                 )
             
             return state
             
         except Exception as e:
-            state["error"] = f"Error detectando itinerario: {str(e)}"
+            state["error"] = f"Error detecting itinerary: {str(e)}"
             return state
     
     async def _analyze_request(self, state: SmartItineraryState) -> SmartItineraryState:
         """
-        Analiza la petición del usuario.
+        Analyzes the user request.
         """
         try:
             state["step"] = "analyze_request"
@@ -271,14 +274,10 @@ class SmartItineraryWorkflow:
             if not total_days:
                 total_days = 7  # Default si no se especifica
             
-            # Obtener TODOS los sitios disponibles
-            all_available_sites = await self.db_agent.search_cities_by_country(country)
-            
             # ⭐ IA SELECCIONA DESTINOS ANTES DEL GRAFO
             destination_selection = await destination_selection_agent.select_destinations(
                 country=country,
                 total_days=total_days,
-                available_sites=all_available_sites,
                 user_preferences=None
             )
             
@@ -290,7 +289,7 @@ class SmartItineraryWorkflow:
                 state["step"] = "error"
                 return state
             
-            logger.info(f"IA seleccionó {len(selected_cities)} destinos de {len(all_available_sites)} disponibles")
+            logger.info(f"IA seleccionó {len(selected_cities)} destinos")
             
             # ⭐ NUEVO: Usar TimeBudgetScheduler para crear plan temporal
             start_dt = datetime.utcnow()
@@ -316,6 +315,9 @@ class SmartItineraryWorkflow:
             # Guardar en BD con información de tiempo
             itinerary_text = new_itinerary.get("itinerary", "No se pudo generar el itinerario")
             
+            # Calcular días reales del plan (exploración + transporte)
+            actual_total_days = (travel_plan.total_explore_hours + travel_plan.total_travel_hours) / 24
+            
             # Preparar datos del itinerario con información de tiempo
             itinerary_data = {
                 "travel_id": state["travel_id"],
@@ -328,7 +330,7 @@ class SmartItineraryWorkflow:
                     "algorithm": "time_budget_scheduler"
                 },
                 "itinerary": itinerary_text,
-                "total_days": total_days,
+                "total_days": actual_total_days,  # Usar días reales calculados por el scheduler
                 "exploration_days": travel_plan.total_explore_hours / 24,
                 "transport_days": travel_plan.total_travel_hours / 24,
                 "travel_plan": travel_plan.dict(),
@@ -458,6 +460,15 @@ class SmartItineraryWorkflow:
             
             if result.inserted_id:
                 logger.info(f"Itinerario guardado exitosamente con ID: {result.inserted_id}")
+                # Generaciones en background
+                try:
+                    asyncio.create_task(daily_visits_service.generate_and_save_for_travel(travel_id))
+                except Exception as e:
+                    logger.error(f"Error scheduling daily_visits generation: {e}")
+                try:
+                    asyncio.create_task(hotel_suggestions_service.generate_and_save_for_travel(travel_id))
+                except Exception as e:
+                    logger.error(f"Error scheduling hotel_suggestions generation: {e}")
                 logger.info(f"Ciudades incluidas: {len(cities)}")
                 logger.info(f"Días totales: {itinerary_to_save.get('total_days', 0)}")
                 logger.info(f"Días de exploración: {itinerary_to_save.get('exploration_days', 0)}")
@@ -477,6 +488,15 @@ class SmartItineraryWorkflow:
         """
         try:
             logger.info(f"Procesando solicitud inteligente: {user_input}")
+            # Determinar días efectivos del viaje: priorizar configuración del viaje en BBDD
+            effective_total_days = None
+            try:
+                travels = await get_travels_collection()
+                tr = await travels.find_one({"_id": ObjectId(travel_id)})
+                if tr and tr.get("total_days"):
+                    effective_total_days = int(tr.get("total_days"))
+            except Exception as e:
+                logger.warning(f"No se pudo leer total_days del viaje {travel_id}: {e}")
             # Gating defensivo: no crear/modificar ante saludos o entradas vacías
             lowered = (user_input or "").strip().lower()
             greetings = {"hola", "hola!", "hola :)", "hi", "hello", "buenas", "buenos dias", "buenas tardes", "buenas noches"}
@@ -536,19 +556,15 @@ Total: {total_cities} {plural}
                 # ⭐ CREAR NUEVO ITINERARIO CON SELECCIÓN ANTES DEL GRAFO
                 logger.info("Creando nuevo itinerario con selección inteligente...")
                 
-                # Extraer días del mensaje del usuario
-                total_days = self._extract_days_from_message(user_input)
-                if not total_days:
-                    total_days = 7  # Default si no se especifica
-                
-                # Obtener TODOS los sitios disponibles
-                all_available_sites = await self.db_agent.search_cities_by_country(country or "thailand")
+                # Calcular días totales efectivos: usar BBDD si existe, si no extraer del mensaje, si no default 7
+                extracted_days = self._extract_days_from_message(user_input)
+                total_days = int(effective_total_days or extracted_days or 7)
+                logger.info(f"Días totales efectivos para la selección: {total_days}")
                 
                 # ⭐ IA SELECCIONA DESTINOS ANTES DEL GRAFO
                 destination_selection = await destination_selection_agent.select_destinations(
                     country=country or "thailand",
                     total_days=total_days,
-                    available_sites=all_available_sites,
                     user_preferences=None
                 )
                 
@@ -558,7 +574,7 @@ Total: {total_cities} {plural}
                 if not selected_cities:
                     response_message = "Lo siento, no pude seleccionar destinos apropiados para tu viaje."
                 else:
-                    logger.info(f"IA seleccionó {len(selected_cities)} destinos de {len(all_available_sites)} disponibles")
+                    logger.info(f"IA seleccionó {len(selected_cities)} destinos")
                     
                     # ⭐ NUEVO: Usar TimeBudgetScheduler para crear plan temporal
                     start_dt = datetime.utcnow()
@@ -617,7 +633,7 @@ Total: {total_cities} {plural}
                     
                     if save_success:
                         logger.info("Itinerario guardado exitosamente en la BBDD")
-                        logger.info(f"Ciudades incluidas: {len(selected_cities)} de {len(all_available_sites)} disponibles")
+                        logger.info(f"Ciudades incluidas: {len(selected_cities)}")
                         logger.info(f"Días totales: {total_days}, Horas exploración: {travel_plan.total_explore_hours:.1f}")
                     else:
                         logger.error("Error guardando itinerario en la BBDD")
