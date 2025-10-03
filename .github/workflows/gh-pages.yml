@@ -30,6 +30,7 @@ jobs:
           REACT_APP_MOCK: "true"
           CI: "false"
           DISABLE_ESLINT_PLUGIN: "true"
+          PUBLIC_URL: "https://amarkosmarkos.github.io/TravelApp"
         run: npm run build
 
       - name: Add SPA fallback (404)
