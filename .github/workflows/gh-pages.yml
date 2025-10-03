@@ -42,5 +42,6 @@ jobs:
           publish_dir: ./frontend/build
           publish_branch: gh-pages
           commit_message: Deploy mock build to gh-pages
+          force_orphan: true
 
 
