@@ -10,14 +10,14 @@ from app.crud.user import get_user_by_id
 from app.core.auth import TokenData
 import logging
 
-# Configurar logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
-    """Obtener usuario actual desde token JWT"""
+    """Get current user from JWT token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -46,9 +46,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
 async def get_current_active_user(
     current_user: UserInDB = Depends(get_current_user)
 ) -> UserInDB:
-    """Obtener usuario activo actual"""
+    """Get current active user"""
     if not current_user.is_active:
-        logger.warning(f"Usuario inactivo intentando acceder: {current_user.email}")
+        logger.warning(f"Inactive user trying to access: {current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
@@ -73,7 +73,7 @@ def create_refresh_token(data: dict) -> str:
     return encoded_jwt
 
 def check_permissions(required_permissions: List[str]):
-    """Decorador para verificar permisos"""
+    """Decorator to verify permissions"""
     async def permission_checker(
         current_user: UserInDB = Depends(get_current_active_user)
     ) -> UserInDB:

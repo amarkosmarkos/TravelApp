@@ -22,10 +22,10 @@ class AIMatchingService:
         available_cities: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Usa IA para hacer match entre ciudades sugeridas y ciudades disponibles en BD
+        Uses AI to match between suggested cities and available cities in the database
         """
         try:
-            # Preparar datos para la IA
+            # Prepare data for AI
             available_cities_formatted = [
                 {
                     "id": str(city["_id"]),
@@ -36,52 +36,52 @@ class AIMatchingService:
                 for city in available_cities
             ]
 
-            # Crear prompt para la IA
+            # Create prompt for AI
             prompt = f"""
-            Necesito que hagas match entre las ciudades sugeridas por IA y las ciudades disponibles en mi base de datos.
+            I need you to match between AI-suggested cities and cities available in my database.
 
-            CIUDADES SUGERIDAS POR IA:
+            AI-SUGGESTED CITIES:
             {json.dumps(ai_suggested_cities, indent=2)}
 
-            CIUDADES DISPONIBLES EN BASE DE DATOS:
+            CITIES AVAILABLE IN DATABASE:
             {json.dumps(available_cities_formatted, indent=2)}
 
-            INSTRUCCIONES:
-            1. Para cada ciudad sugerida por IA, encuentra la mejor coincidencia en la base de datos
-            2. Considera variaciones de nombres (ej: "Bangkok" puede coincidir con "Bangkok")
-            3. Asigna un nivel de confianza (0.0 a 1.0) para cada match
-            4. Si no encuentras coincidencia, marca como "unmatched"
+            INSTRUCTIONS:
+            1. For each AI-suggested city, find the best match in the database
+            2. Consider name variations (e.g., "Bangkok" can match "Bangkok")
+            3. Assign a confidence level (0.0 to 1.0) for each match
+            4. If no match is found, mark as "unmatched"
 
-            RESPONDE EN FORMATO JSON:
+            RESPOND IN JSON FORMAT:
             {{
                 "matched_cities": [
                     {{
-                        "ai_name": "nombre de la ciudad sugerida",
-                        "db_id": "id de la ciudad en BD",
-                        "db_name": "nombre exacto en BD",
+                        "ai_name": "suggested city name",
+                        "db_id": "city id in database",
+                        "db_name": "exact name in database",
                         "confidence": 0.95
                     }}
                 ],
                 "unmatched_cities": [
                     {{
-                        "ai_name": "nombre de la ciudad sugerida",
-                        "reason": "razón por la que no se encontró match"
+                        "ai_name": "suggested city name",
+                        "reason": "reason why no match was found"
                     }}
                 ]
             }}
             """
 
-            # Llamar a la IA
+            # Call AI
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
-                    {"role": "system", "content": "Eres un experto en hacer matching de nombres de ciudades. Responde solo en formato JSON válido."},
+                    {"role": "system", "content": "You are an expert in city name matching. Respond only in valid JSON format."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1  # Baja temperatura para respuestas más consistentes
+                temperature=0.1  # Low temperature for more consistent responses
             )
 
-            # Procesar respuesta
+            # Process response
             response_content = response.choices[0].message.content
             result = json.loads(response_content)
 
@@ -103,10 +103,10 @@ class AIMatchingService:
         available_sites: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Usa IA para hacer match entre ciudades sugeridas y sitios disponibles en BD
+        Uses AI to match between suggested cities and available sites in the database
         """
         try:
-            # Preparar datos para la IA con la estructura correcta de sites
+            # Prepare data for AI with correct sites structure
             available_sites_formatted = [
                 {
                     "id": str(site["_id"]),
@@ -122,55 +122,55 @@ class AIMatchingService:
                 for site in available_sites
             ]
 
-            # Crear prompt para la IA
+            # Create prompt for AI
             prompt = f"""
-            Necesito que hagas match entre las ciudades sugeridas por IA y los sitios disponibles en mi base de datos.
+            I need you to match between AI-suggested cities and sites available in my database.
 
-            CIUDADES SUGERIDAS POR IA:
+            AI-SUGGESTED CITIES:
             {json.dumps(ai_suggested_cities, indent=2)}
 
-            SITIOS DISPONIBLES EN BASE DE DATOS (SOLO DEL PAÍS ESPECIFICADO):
+            SITES AVAILABLE IN DATABASE (ONLY FROM SPECIFIED COUNTRY):
             {json.dumps(available_sites_formatted, indent=2)}
 
-            INSTRUCCIONES CRÍTICAS:
-            1. SOLO haz match con sitios que estén en la lista de "SITIOS DISPONIBLES"
-            2. Para cada ciudad sugerida por IA, encuentra la mejor coincidencia en la base de datos
-            3. Considera variaciones de nombres (ej: "Bangkok" puede coincidir con "Bangkok", "Ao Nang" con "Ao Nang")
-            4. Usa tanto el nombre normal como el normalized_name para hacer match
-            5. Asigna un nivel de confianza (0.0 a 1.0) para cada match
-            6. Si no encuentras coincidencia, marca como "unmatched"
-            7. NO inventes ciudades que no estén en la lista de disponibles
+            CRITICAL INSTRUCTIONS:
+            1. ONLY match with sites that are in the "AVAILABLE SITES" list
+            2. For each AI-suggested city, find the best match in the database
+            3. Consider name variations (e.g., "Bangkok" can match "Bangkok", "Ao Nang" with "Ao Nang")
+            4. Use both normal name and normalized_name for matching
+            5. Assign a confidence level (0.0 to 1.0) for each match
+            6. If no match is found, mark as "unmatched"
+            7. DO NOT invent cities that are not in the available list
 
-            RESPONDE EN FORMATO JSON:
+            RESPOND IN JSON FORMAT:
             {{
                 "matched_cities": [
                     {{
-                        "ai_name": "nombre de la ciudad sugerida",
-                        "db_id": "id del sitio en BD",
-                        "db_name": "nombre exacto en BD",
+                        "ai_name": "suggested city name",
+                        "db_id": "site id in database",
+                        "db_name": "exact name in database",
                         "confidence": 0.95
                     }}
                 ],
                 "unmatched_cities": [
                     {{
-                        "ai_name": "nombre de la ciudad sugerida",
-                        "reason": "razón por la que no se encontró match"
+                        "ai_name": "suggested city name",
+                        "reason": "reason why no match was found"
                     }}
                 ]
             }}
             """
 
-            # Llamar a la IA
+            # Call AI
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
-                    {"role": "system", "content": "Eres un experto en hacer matching de nombres de ciudades y sitios turísticos. SOLO haz match con sitios que estén en la lista proporcionada. Responde solo en formato JSON válido."},
+                    {"role": "system", "content": "You are an expert in city and tourist site name matching. ONLY match with sites that are in the provided list. Respond only in valid JSON format."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1  # Baja temperatura para respuestas más consistentes
+                temperature=0.1  # Low temperature for more consistent responses
             )
 
-            # Procesar respuesta
+            # Process response
             response_content = response.choices[0].message.content
             result = json.loads(response_content)
 
@@ -193,10 +193,10 @@ class AIMatchingService:
         user_id: str
     ) -> Dict[str, Any]:
         """
-        Crea un itinerario basado en las ciudades que hicieron match
+        Creates an itinerary based on cities that matched
         """
         try:
-            # Obtener detalles completos de las ciudades
+            # Get complete city details
             from app.database import get_cities_collection
             from bson import ObjectId
             
@@ -207,7 +207,7 @@ class AIMatchingService:
                 "_id": {"$in": city_ids}
             }).to_list(length=None)
 
-            # Crear itinerario
+            # Create itinerary
             itinerary_data = {
                 "travel_id": travel_id,
                 "cities": [
@@ -229,7 +229,7 @@ class AIMatchingService:
                 "updated_at": datetime.utcnow()
             }
 
-            # Guardar en BD
+            # Save to database
             from app.crud import travel as travel_crud
             from app.models.travel import ItineraryCreate
             
@@ -254,10 +254,10 @@ class AIMatchingService:
         user_id: str
     ) -> Dict[str, Any]:
         """
-        Crea un itinerario basado en los sitios que hicieron match
+        Creates an itinerary based on sites that matched
         """
         try:
-            # Obtener detalles completos de los sitios
+            # Get complete site details
             from app.database import get_sites_collection
             from bson import ObjectId
             
@@ -268,7 +268,7 @@ class AIMatchingService:
                 "_id": {"$in": site_ids}
             }).to_list(length=None)
 
-            # Crear itinerario con coordenadas corregidas
+            # Create itinerary with corrected coordinates
             itinerary_data = {
                 "travel_id": travel_id,
                 "cities": [
@@ -277,14 +277,14 @@ class AIMatchingService:
                         "name": site["name"],
                         "normalized_name": site.get("normalized_name", ""),
                         "description": site.get("description", ""),
-                        # Convertir coordenadas de string a float
+                        # Convert coordinates from string to float
                         "latitude": float(site.get("lat", "0")) if site.get("lat") else None,
                         "longitude": float(site.get("lon", "0")) if site.get("lon") else None,
                         "coordinates": {
                             "latitude": float(site.get("lat", "0")) if site.get("lat") else None,
                             "longitude": float(site.get("lon", "0")) if site.get("lon") else None
                         } if site.get("lat") and site.get("lon") else None,
-                        # Información adicional del sitio
+                        # Additional site information
                         "type": site.get("type", ""),
                         "entity_type": site.get("entity_type", ""),
                         "subtype": site.get("subtype", ""),
@@ -297,7 +297,7 @@ class AIMatchingService:
                 "updated_at": datetime.utcnow()
             }
 
-            # Guardar en BD
+            # Save to database
             from app.crud import travel as travel_crud
             from app.models.travel import ItineraryCreate
             
@@ -315,5 +315,5 @@ class AIMatchingService:
             logger.error(f"Error creating itinerary from sites: {str(e)}")
             raise
 
-# Instancia global del servicio
+# Global instance of the service
 ai_matching_service = AIMatchingService() 

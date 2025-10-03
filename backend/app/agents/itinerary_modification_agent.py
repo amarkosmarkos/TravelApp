@@ -1,5 +1,5 @@
 """
-Agente especializado en modificar itinerarios existentes.
+Agent specialized in modifying existing itineraries.
 """
 
 from typing import Dict, Any, List, Optional
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class ItineraryModificationAgent:
     """
-    Agente que modifica itinerarios existentes.
+    Agent that modifies existing itineraries.
     """
     
     def __init__(self):
@@ -27,10 +27,10 @@ class ItineraryModificationAgent:
                               modifications: Dict[str, Any],
                               user_id: str) -> Dict[str, Any]:
         """
-        Modifica un itinerario existente según las especificaciones.
+        Modifies an existing itinerary according to specifications.
         """
         try:
-            # Obtener el itinerario actual
+            # Get current itinerary
             itineraries_collection = await get_itineraries_collection()
             current_itinerary = await itineraries_collection.find_one({
                 "_id": ObjectId(itinerary_id),
@@ -38,14 +38,14 @@ class ItineraryModificationAgent:
             })
             
             if not current_itinerary:
-                return {"error": "Itinerario no encontrado"}
+                return {"error": "Itinerary not found"}
             
-            # Aplicar modificaciones
+            # Apply modifications
             modified_itinerary = await self._apply_modifications(
                 current_itinerary, modifications
             )
             
-            # Actualizar en la base de datos
+            # Update in database
             result = await itineraries_collection.update_one(
                 {"_id": ObjectId(itinerary_id)},
                 {
@@ -58,7 +58,7 @@ class ItineraryModificationAgent:
                 }
             )
             
-            # Actualizar items del itinerario
+            # Update itinerary items
             await self._update_itinerary_items(itinerary_id, modified_itinerary.get("items", []))
             
             return {
@@ -70,19 +70,19 @@ class ItineraryModificationAgent:
             }
             
         except Exception as e:
-            self.logger.error(f"Error modificando itinerario: {e}")
+            self.logger.error(f"Error modifying itinerary: {e}")
             return {"error": str(e)}
     
     async def _apply_modifications(self, current_itinerary: Dict[str, Any], 
                                  modifications: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Aplica las modificaciones al itinerario actual.
+        Applies modifications to the current itinerary.
         """
         try:
             current_items = current_itinerary.get("items", [])
             modified_items = current_items.copy()
             
-            # Aplicar cambios según el tipo de modificación
+            # Apply changes according to modification type
             if modifications.get("action_type") == "add_cities":
                 modified_items = await self._add_cities_to_itinerary(
                     current_items, modifications.get("cities_to_add", [])
@@ -101,7 +101,7 @@ class ItineraryModificationAgent:
                     current_items, modifications.get("preferences", {})
                 )
             
-            # Recalcular días y orden
+            # Recalculate days and order
             modified_items = self._recalculate_itinerary_days(modified_items)
             
             return {
@@ -112,13 +112,13 @@ class ItineraryModificationAgent:
             }
             
         except Exception as e:
-            self.logger.error(f"Error aplicando modificaciones: {e}")
+            self.logger.error(f"Error applying modifications: {e}")
             return current_itinerary
     
     async def _add_cities_to_itinerary(self, current_items: List[Dict], 
                                       cities_to_add: List[str]) -> List[Dict]:
         """
-        Añade ciudades al itinerario.
+        Adds cities to the itinerary.
         """
         try:
             from app.agents.database_agent import DatabaseAgent
@@ -127,10 +127,10 @@ class ItineraryModificationAgent:
             db_agent = DatabaseAgent()
             routing_agent = RoutingAgent()
             
-            # Obtener información de las ciudades a añadir
+            # Get information about cities to add
             new_items = []
             for city_name in cities_to_add:
-                # Buscar información de la ciudad
+                # Search for city information
                 city_info = await db_agent.search_sites_by_city(city_name)
                 if city_info:
                     new_items.append({
@@ -140,26 +140,26 @@ class ItineraryModificationAgent:
                         "activities": [],
                         "accommodation": "",
                         "transport": "",
-                        "notes": f"Añadido por modificación del usuario"
+                        "notes": f"Added by user modification"
                     })
             
-            # Combinar items actuales con nuevos
+            # Combine current items with new ones
             all_items = current_items + new_items
             
-            # Optimizar ruta si hay múltiples ciudades
+            # Optimize route if there are multiple cities
             if len(all_items) > 1:
-                # Convertir a formato para routing
+                # Convert to routing format
                 cities_for_routing = [
                     {"name": item["city_name"]} for item in all_items
                 ]
                 
-                # Calcular ruta optimizada
+                # Calculate optimized route
                 optimized_route = routing_agent.calculate_route(cities_for_routing)
                 
-                # Reordenar items según la ruta optimizada
+                # Reorder items according to optimized route
                 optimized_items = []
                 for i, city in enumerate(optimized_route.get("route", [])):
-                    # Encontrar el item correspondiente
+                    # Find corresponding item
                     for item in all_items:
                         if item["city_name"] == city["name"]:
                             item["day"] = i + 1
@@ -171,52 +171,52 @@ class ItineraryModificationAgent:
             return all_items
             
         except Exception as e:
-            self.logger.error(f"Error añadiendo ciudades: {e}")
+            self.logger.error(f"Error adding cities: {e}")
             return current_items
     
     async def _remove_cities_from_itinerary(self, current_items: List[Dict], 
                                            cities_to_remove: List[str]) -> List[Dict]:
         """
-        Elimina ciudades del itinerario.
+        Removes cities from the itinerary.
         """
         try:
-            # Filtrar items que no están en la lista de eliminación
+            # Filter items that are not in the removal list
             remaining_items = [
                 item for item in current_items 
                 if item.get("city_name") not in cities_to_remove
             ]
             
-            # Recalcular días
+            # Recalculate days
             for i, item in enumerate(remaining_items):
                 item["day"] = i + 1
             
             return remaining_items
             
         except Exception as e:
-            self.logger.error(f"Error eliminando ciudades: {e}")
+            self.logger.error(f"Error removing cities: {e}")
             return current_items
     
     async def _optimize_itinerary_route(self, current_items: List[Dict]) -> List[Dict]:
         """
-        Optimiza la ruta del itinerario.
+        Optimizes the itinerary route.
         """
         try:
             from app.agents.routing_agent import RoutingAgent
             
             routing_agent = RoutingAgent()
             
-            # Convertir a formato para routing
+            # Convert to routing format
             cities_for_routing = [
                 {"name": item["city_name"]} for item in current_items
             ]
             
-            # Calcular ruta optimizada
+            # Calculate optimized route
             optimized_route = routing_agent.calculate_route(cities_for_routing)
             
-            # Reordenar items según la ruta optimizada
+            # Reorder items according to optimized route
             optimized_items = []
             for i, city in enumerate(optimized_route.get("route", [])):
-                # Encontrar el item correspondiente
+                # Find corresponding item
                 for item in current_items:
                     if item["city_name"] == city["name"]:
                         item["day"] = i + 1
@@ -226,16 +226,16 @@ class ItineraryModificationAgent:
             return optimized_items
             
         except Exception as e:
-            self.logger.error(f"Error optimizando ruta: {e}")
+            self.logger.error(f"Error optimizing route: {e}")
             return current_items
     
     async def _update_itinerary_preferences(self, current_items: List[Dict], 
                                           preferences: Dict[str, Any]) -> List[Dict]:
         """
-        Actualiza las preferencias del itinerario.
+        Updates itinerary preferences.
         """
         try:
-            # Actualizar items con nuevas preferencias
+            # Update items with new preferences
             for item in current_items:
                 item["preferences"] = preferences
                 item["last_updated"] = datetime.utcnow()
@@ -243,18 +243,18 @@ class ItineraryModificationAgent:
             return current_items
             
         except Exception as e:
-            self.logger.error(f"Error actualizando preferencias: {e}")
+            self.logger.error(f"Error updating preferences: {e}")
             return current_items
     
     def _recalculate_itinerary_days(self, items: List[Dict]) -> List[Dict]:
         """
-        Recalcula los días del itinerario.
+        Recalculates itinerary days.
         """
         try:
             from datetime import datetime, timedelta
             from geopy.distance import geodesic
             AVG_SPEED_KMH = 70
-            # Determinar fecha de inicio: llegada de la primera ciudad o ahora
+            # Determine start date: arrival of first city or now
             if items and items[0].get("arrival_dt"):
                 current_dt = datetime.fromisoformat(items[0]["arrival_dt"])
             else:
@@ -262,11 +262,11 @@ class ItineraryModificationAgent:
             for i, item in enumerate(items):
                 item["day"] = i + 1
                 stay_days = item.get("days") or item.get("stay_days") or 1
-                # Asignar arrival si no existe o si estamos recalculando
+                # Assign arrival if it doesn't exist or if we're recalculating
                 item["arrival_dt"] = current_dt.isoformat()
                 departure_dt = current_dt + timedelta(days=stay_days)
                 item["departure_dt"] = departure_dt.isoformat()
-                # Calcular transporte a siguiente
+                # Calculate transport to next
                 if i < len(items) - 1:
                     next_item = items[i + 1]
                     if (item.get("latitude") or item.get("lat")) and (item.get("longitude") or item.get("lon")) and (next_item.get("latitude") or next_item.get("lat")) and (next_item.get("longitude") or next_item.get("lon")):
@@ -286,20 +286,20 @@ class ItineraryModificationAgent:
             return items
             
         except Exception as e:
-            self.logger.error(f"Error recalculando días: {e}")
+            self.logger.error(f"Error recalculating days: {e}")
             return items
     
     async def _update_itinerary_items(self, itinerary_id: str, items: List[Dict]):
         """
-        Actualiza los items del itinerario en la base de datos.
+        Updates itinerary items in the database.
         """
         try:
             items_collection = await get_itinerary_items_collection()
             
-            # Eliminar items existentes
+            # Delete existing items
             await items_collection.delete_many({"itinerary_id": itinerary_id})
             
-            # Insertar nuevos items
+            # Insert new items
             if items:
                 for item in items:
                     item["itinerary_id"] = itinerary_id
@@ -309,11 +309,11 @@ class ItineraryModificationAgent:
                 await items_collection.insert_many(items)
             
         except Exception as e:
-            self.logger.error(f"Error actualizando items: {e}")
+            self.logger.error(f"Error updating items: {e}")
     
     async def get_modification_history(self, itinerary_id: str) -> List[Dict[str, Any]]:
         """
-        Obtiene el historial de modificaciones de un itinerario.
+        Gets the modification history of an itinerary.
         """
         try:
             itineraries_collection = await get_itineraries_collection()
@@ -329,21 +329,21 @@ class ItineraryModificationAgent:
                     "total_modifications": len(itinerary.get("modifications", []))
                 }
             else:
-                return {"error": "Itinerario no encontrado"}
+                return {"error": "Itinerary not found"}
                 
         except Exception as e:
-            self.logger.error(f"Error obteniendo historial: {e}")
+            self.logger.error(f"Error getting history: {e}")
             return {"error": str(e)} 
     
     async def analyze_modification_request(self, user_input: str) -> Dict[str, Any]:
         """
-        Analiza la solicitud de modificación del usuario.
+        Analyzes the user's modification request.
         """
         try:
-            # Análisis básico de la intención
+            # Basic intention analysis
             user_input_lower = user_input.lower()
             
-            # Detectar tipo de modificación
+            # Detect modification type
             if any(word in user_input_lower for word in ["añadir", "agregar", "add", "añade", "agrega"]):
                 intention = "add_cities"
             elif any(word in user_input_lower for word in ["quitar", "eliminar", "remove", "quit", "borrar"]):
@@ -355,15 +355,15 @@ class ItineraryModificationAgent:
             else:
                 intention = "general_modification"
             
-            # Extraer ciudades mencionadas (implementación básica)
+            # Extract mentioned cities (basic implementation)
             cities_mentioned = []
-            # Aquí podrías usar NLP para extraer nombres de ciudades
-            # Por ahora, devolvemos una lista vacía
+            # Here you could use NLP to extract city names
+            # For now, we return an empty list
 
-            # Extraer días solicitados
+            # Extract requested days
             total_days = self._extract_days_from_text(user_input)
 
-            # Extraer tema preferido (historia, playa, naturaleza, gastronomía)
+            # Extract preferred theme (history, beach, nature, food)
             theme = self._extract_theme_from_text(user_input)
             
             return {
@@ -382,7 +382,7 @@ class ItineraryModificationAgent:
             }
             
         except Exception as e:
-            self.logger.error(f"Error analizando solicitud de modificación: {e}")
+            self.logger.error(f"Error analyzing modification request: {e}")
             return {
                 "intention": "general_modification",
                 "cities_mentioned": [],
@@ -400,21 +400,21 @@ class ItineraryModificationAgent:
         patterns = [
             r"(\d+)\s*d[ií]as?",
             r"(\d+)\s*days?",
-            r"una semana|one week",
+            r"one week|una semana",
             r"(\d+)\s*semanas?|(\d+)\s*weeks?",
-            r"fin de semana|weekend"
+            r"weekend|fin de semana"
         ]
         for p in patterns:
             m = re.search(p, t)
             if m:
-                if "semana" in p or "week" in p:
-                    if "una" in p or "one" in p:
+                if "week" in p or "semana" in p:
+                    if "one" in p or "una" in p:
                         return 7
-                    # tomar último grupo con número
+                    # take last group with number
                     num = next((int(g) for g in m.groups() if g and g.isdigit()), None)
                     if num:
                         return num * 7
-                if "fin de semana" in p or "weekend" in p:
+                if "weekend" in p or "fin de semana" in p:
                     return 3
                 if m.group(1):
                     return int(m.group(1))
@@ -422,23 +422,23 @@ class ItineraryModificationAgent:
 
     def _extract_theme_from_text(self, text: str) -> str:
         t = text.lower()
-        if any(k in t for k in ["historia", "histórico", "historico", "templo", "museo"]):
+        if any(k in t for k in ["history", "historic", "temple", "museum", "historia", "histórico", "historico", "templo", "museo"]):
             return "history"
-        if any(k in t for k in ["playa", "beach", "isla", "islas", "snorkel"]):
+        if any(k in t for k in ["beach", "island", "snorkel", "playa", "isla", "islas"]):
             return "beach"
-        if any(k in t for k in ["naturaleza", "montaña", "parque", "senderismo", "trekking"]):
+        if any(k in t for k in ["nature", "mountain", "park", "hiking", "trekking", "naturaleza", "montaña", "parque", "senderismo"]):
             return "nature"
-        if any(k in t for k in ["comida", "gastronom", "restaurante", "food"]):
+        if any(k in t for k in ["food", "restaurant", "gastronomy", "comida", "gastronom", "restaurante"]):
             return "food"
         return ""
     
     async def apply_modifications(self, existing_itinerary: Dict[str, Any], 
                                 analysis: Dict[str, Any], available_sites: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Aplica modificaciones usando IA para entender la intención y hacer cambios inteligentes.
+        Applies modifications using AI to understand intention and make intelligent changes.
         """
         try:
-            logger.info(f"=== INICIANDO apply_modifications ===")
+            logger.info(f"=== STARTING apply_modifications ===")
             logger.info(f"existing_itinerary keys: {list(existing_itinerary.keys())}")
             logger.info(f"existing_itinerary: {existing_itinerary}")
             logger.info(f"analysis: {analysis}")
@@ -446,7 +446,7 @@ class ItineraryModificationAgent:
             
             user_input = analysis.get("user_input", "")
             
-            # Buscar el travel_id de diferentes maneras
+            # Search for travel_id in different ways
             travel_id = (
                 existing_itinerary.get("travel_id")
                 or (existing_itinerary.get("itinerary", {}).get("travel_id") if isinstance(existing_itinerary.get("itinerary"), dict) else None)
@@ -455,45 +455,45 @@ class ItineraryModificationAgent:
             )
             
             if not travel_id:
-                logger.error(f"No se encontró travel_id en existing_itinerary")
-                logger.error(f"Keys disponibles: {list(existing_itinerary.keys())}")
+                logger.error(f"travel_id not found in existing_itinerary")
+                logger.error(f"Available keys: {list(existing_itinerary.keys())}")
                 return {
                     "success": False,
-                    "error": "No se encontró el ID del viaje"
+                    "error": "Travel ID not found"
                 }
             
-            logger.info(f"Usando travel_id: {travel_id}")
+            logger.info(f"Using travel_id: {travel_id}")
             
-            # Obtener el itinerario actual de la base de datos
+            # Get current itinerary from database
             itineraries_collection = await get_itineraries_collection()
             current_itinerary = await itineraries_collection.find_one({
                 "travel_id": travel_id
             })
             
             if not current_itinerary:
-                logger.error(f"Itinerario no encontrado en BBDD para travel_id: {travel_id}")
+                logger.error(f"Itinerary not found in DB for travel_id: {travel_id}")
                 return {
                     "success": False,
-                    "error": "Itinerario no encontrado"
+                    "error": "Itinerary not found"
                 }
             
-            # Obtener las ciudades actuales del itinerario
+            # Get current cities from itinerary
             current_cities = current_itinerary.get("cities", [])
-            logger.info(f"Ciudades actuales del itinerario: {len(current_cities)}")
+            logger.info(f"Current cities in itinerary: {len(current_cities)}")
             
-            # Usar IA para entender la modificación
-            logger.info(f"Llamando a _analyze_modification_with_ai...")
+            # Use AI to understand the modification
+            logger.info(f"Calling _analyze_modification_with_ai...")
             modification_result = await self._analyze_modification_with_ai(
                 user_input, current_cities, available_sites
             )
             
-            logger.info(f"Resultado de IA: {modification_result}")
+            logger.info(f"AI result: {modification_result}")
             
             if modification_result.get("success"):
-                # Aplicar los cambios sugeridos por la IA
+                # Apply changes suggested by AI
                 modified_cities = modification_result.get("modified_cities", current_cities)
 
-                # Filtrar por tema si se solicitó (history/beach/nature/food)
+                # Filter by theme if requested (history/beach/nature/food)
                 theme = analysis.get("theme") or analysis.get("analysis", {}).get("theme") or ""
                 if theme:
                     theme_keywords = {
@@ -507,12 +507,12 @@ class ItineraryModificationAgent:
                         text = (city.get("description") or "") + " " + (city.get("type") or "") + " " + (city.get("name") or "")
                         t = text.lower()
                         return any(k in t for k in keys) if keys else True
-                    # Mantener ciudades que encajan y, si quedan muy pocas, volver a incluir las originales
+                    # Keep cities that match and, if too few remain, include originals again
                     themed = [c for c in modified_cities if matches_theme(c)]
                     if len(themed) >= 2:
                         modified_cities = themed
 
-                # Redistribuir días al total solicitado (si existe), manteniendo mínimo 1 día por ciudad
+                # Redistribute days to requested total (if exists), maintaining minimum 1 day per city
                 requested_days = analysis.get("total_days") or analysis.get("analysis", {}).get("total_days") or 0
                 if requested_days and requested_days > 0 and modified_cities:
                     per_city = max(1, requested_days // len(modified_cities))
@@ -521,19 +521,19 @@ class ItineraryModificationAgent:
                         base_days = per_city + (1 if idx < remainder else 0)
                         city["days"] = base_days
 
-                # Si no hay days en las ciudades, asignar 2 por defecto y luego normalizar a <= 14
+                # If no days in cities, assign 2 by default and then normalize to <= 14
                 if modified_cities and not any(c.get("days") for c in modified_cities):
                     for c in modified_cities:
                         c["days"] = 2
 
-                # Normalizar claves de coordenadas
+                # Normalize coordinate keys
                 for c in modified_cities:
                     if c.get("lat") and not c.get("latitude"):
                         c["latitude"] = c.get("lat")
                     if c.get("lon") and not c.get("longitude"):
                         c["longitude"] = c.get("lon")
 
-                # Actualizar el itinerario en la base de datos
+                # Update itinerary in database
                 await itineraries_collection.update_one(
                     {"travel_id": travel_id},
                     {
@@ -545,22 +545,22 @@ class ItineraryModificationAgent:
                     }
                 )
 
-                logger.info(f"Itinerario actualizado por IA: {len(modified_cities)} ciudades")
+                logger.info(f"Itinerary updated by AI: {len(modified_cities)} cities")
 
-                # Regenerar daily_visits para el travel
+                # Regenerate daily_visits for travel
                 try:
                     await daily_visits_service.generate_and_save_for_travel(str(travel_id))
                 except Exception as e:
                     self.logger.error(f"Error regenerating daily_visits: {e}")
 
-                # Mensaje con pluralización correcta
+                # Message with correct pluralization
                 total_cities = len(modified_cities)
-                plural = "ciudad" if total_cities == 1 else "ciudades"
+                plural = "city" if total_cities == 1 else "cities"
 
                 return {
                     "success": True,
                     "action": "ai_modification",
-                    "message": modification_result.get("message", f"Itinerario actualizado por IA: {total_cities} {plural}"),
+                    "message": modification_result.get("message", f"Itinerary updated by AI: {total_cities} {plural}"),
                     "itinerary": {
                         "cities": modified_cities,
                         "total_items": total_cities,
@@ -568,14 +568,14 @@ class ItineraryModificationAgent:
                     }
                 }
             else:
-                logger.error(f"Error en IA: {modification_result.get('error')}")
+                logger.error(f"AI error: {modification_result.get('error')}")
                 return {
                     "success": False,
-                    "error": modification_result.get("error", "No se pudo procesar la modificación")
+                    "error": modification_result.get("error", "Could not process modification")
                 }
                 
         except Exception as e:
-            logger.error(f"Error aplicando modificaciones: {e}")
+            logger.error(f"Error applying modifications: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -586,12 +586,12 @@ class ItineraryModificationAgent:
     async def _analyze_modification_with_ai(self, user_input: str, current_cities: List[Dict], 
                                           available_sites: List[Dict]) -> Dict[str, Any]:
         """
-        Usa IA para analizar la modificación y sugerir cambios.
+        Uses AI to analyze the modification and suggest changes.
         """
         try:
-            logger.info(f"Analizando modificación con IA: {user_input}")
-            logger.info(f"Ciudades actuales: {len(current_cities)}")
-            logger.info(f"Sitios disponibles: {len(available_sites)}")
+            logger.info(f"Analyzing modification with AI: {user_input}")
+            logger.info(f"Current cities: {len(current_cities)}")
+            logger.info(f"Available sites: {len(available_sites)}")
             
             from openai import AzureOpenAI
             from app.config import settings
@@ -602,7 +602,7 @@ class ItineraryModificationAgent:
                 api_version=settings.AZURE_OPENAI_API_VERSION
             )
             
-            # Preparar datos para la IA
+            # Prepare data for AI
             current_cities_formatted = [
                 {
                     "name": city.get("name", ""),
@@ -626,67 +626,67 @@ class ItineraryModificationAgent:
                 for site in available_sites
             ]
             
-            logger.info(f"Datos preparados para IA")
+            logger.info(f"Data prepared for AI")
             
-            # Crear prompt para la IA
+            # Create prompt for AI
             prompt = f"""
-            Analiza la solicitud de modificación del usuario y sugiere cambios al itinerario.
+            Analyze the user's modification request and suggest changes to the itinerary.
 
-            SOLICITUD DEL USUARIO: "{user_input}"
+            USER REQUEST: "{user_input}"
 
-            ITINERARIO ACTUAL:
+            CURRENT ITINERARY:
             {current_cities_formatted}
 
-            SITIOS DISPONIBLES:
+            AVAILABLE SITES:
             {available_sites_formatted}
 
-            INSTRUCCIONES:
-            1. Entiende la intención del usuario (cambiar, añadir, quitar ciudades)
-            2. Identifica las ciudades mencionadas
-            3. Sugiere los cambios apropiados
-            4. Mantén la coherencia del itinerario
-            5. Considera las distancias y tiempo de transporte
+            INSTRUCTIONS:
+            1. Understand user intention (change, add, remove cities)
+            2. Identify mentioned cities
+            3. Suggest appropriate changes
+            4. Maintain itinerary coherence
+            5. Consider distances and travel time
 
-            RESPONDE EN FORMATO JSON:
+            RESPOND IN JSON FORMAT:
             {{
-                "intention": "tipo de modificación (change, add, remove, optimize)",
+                "intention": "modification type (change, add, remove, optimize)",
                 "changes": [
                     {{
                         "action": "add/remove/replace",
-                        "city_name": "nombre de la ciudad",
-                        "reason": "razón del cambio"
+                        "city_name": "city name",
+                        "reason": "reason for change"
                     }}
                 ],
                 "modified_cities": [
                     {{
-                        "name": "nombre de la ciudad",
-                        "days": número de días,
-                        "type": "tipo de sitio",
-                        "description": "descripción"
+                        "name": "city name",
+                        "days": number of days,
+                        "type": "site type",
+                        "description": "description"
                     }}
                 ],
-                "message": "mensaje explicativo de los cambios"
+                "message": "explanatory message of changes"
             }}
             """
             
-            logger.info(f"Llamando a la IA...")
+            logger.info(f"Calling AI...")
             
-            # Llamar a la IA
+            # Call AI
             response = client.chat.completions.create(
                 model=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
                 messages=[
                     {
                         "role": "system",
-                        "content": "Eres un experto en planificación de viajes. Analiza las solicitudes de modificación de itinerarios y sugiere cambios inteligentes."
+                        "content": "You are a travel planning expert. Analyze itinerary modification requests and suggest intelligent changes."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3
             )
             
-            logger.info(f"Respuesta de IA recibida")
+            logger.info(f"AI response received")
             
-            # Modelos Pydantic para validar salida
+            # Pydantic models to validate output
             class Change(BaseModel):
                 action: str
                 city_name: str
@@ -704,38 +704,38 @@ class ItineraryModificationAgent:
                 modified_cities: List[ModifiedCity] = []
                 message: str | None = None
 
-            # Procesar respuesta
+            # Process response
             response_content = response.choices[0].message.content or ""
-            logger.info(f"Contenido de respuesta raw: {response_content[:200]}...")
+            logger.info(f"Raw response content: {response_content[:200]}...")
 
-            # Eliminar posibles bloques markdown ```json ... ``` y validar JSON
+            # Remove possible markdown blocks ```json ... ``` and validate JSON
             import re
             cleaned = re.sub(r"```[a-zA-Z]*", "", response_content).replace("```", "").strip()
             
-            logger.info(f"Contenido limpiado: {cleaned[:200]}...")
-            # Intentar parsear con tolerancia
+            logger.info(f"Cleaned content: {cleaned[:200]}...")
+            # Try to parse with tolerance
             try:
                 result_raw = json.loads(cleaned)
             except Exception:
-                # Intentar extraer el primer bloque JSON entre llaves
+                # Try to extract first JSON block between braces
                 import re as _re
                 match = _re.search(r"\{[\s\S]*\}", cleaned)
                 if not match:
                     raise
                 result_raw = json.loads(match.group(0))
 
-            # Validar contra esquema
+            # Validate against schema
             try:
                 validated = ModResult(**result_raw)
             except ValidationError as ve:
-                logger.error(f"Respuesta IA inválida: {ve}")
-                return {"success": False, "error": "Respuesta IA inválida"}
+                logger.error(f"Invalid AI response: {ve}")
+                return {"success": False, "error": "Invalid AI response"}
             
-            # Aplicar los cambios sugeridos por la IA
+            # Apply changes suggested by AI
             modified_cities = []
             
             for city_data in validated.modified_cities:
-                # Buscar el sitio correspondiente en available_sites
+                # Search for corresponding site in available_sites
                 site_data = None
                 for site in available_sites:
                     if site.get("name", "").lower() == (city_data.name or "").lower():
@@ -746,17 +746,17 @@ class ItineraryModificationAgent:
                 if site_data:
                     modified_cities.append(site_data)
             
-            logger.info(f"Ciudades modificadas: {len(modified_cities)}")
+            logger.info(f"Modified cities: {len(modified_cities)}")
             
             return {
                 "success": True,
                 "modified_cities": modified_cities,
-                "message": validated.message or "Itinerario actualizado por IA",
+                "message": validated.message or "Itinerary updated by AI",
                 "intention": validated.intention or "modification"
             }
             
         except Exception as e:
-            logger.error(f"Error analizando modificación con IA: {e}")
+            logger.error(f"Error analyzing modification with AI: {e}")
             import traceback
             traceback.print_exc()
             return {

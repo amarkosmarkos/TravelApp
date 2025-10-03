@@ -41,6 +41,7 @@ from jwt.exceptions import InvalidTokenError
 from app.config import settings
 from ..middleware.auth import get_current_user, verify_ws_token, verify_travel_access
 from app.services.hotel_suggestions_service import hotel_suggestions_service
+from app.services.transport_plan_service import transport_plan_service
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -188,7 +189,7 @@ async def update_travel(
                 detail="Viaje no encontrado"
             )
         
-        # Preparar la actualización
+        # Prepare the update
         update_data = travel_update.dict(exclude_unset=True)
         update_data["updated_at"] = datetime.utcnow()
         
@@ -375,7 +376,7 @@ async def read_itinerary_items(
             normalized_cities = []
             for city in cities:
                 try:
-                    # Leer de múltiples fuentes: coordinates | latitude/longitude | lat/lon | metadata
+                    # Read from multiple sources: coordinates | latitude/longitude | lat/lon | metadata
                     lat = None
                     lon = None
                     if isinstance(city.get("coordinates"), dict):
@@ -404,7 +405,7 @@ async def read_itinerary_items(
                     city_out = dict(city)
                     if lat_f is not None and lon_f is not None:
                         city_out["coordinates"] = {"latitude": lat_f, "longitude": lon_f}
-                        # Mantener también campos estándar
+                        # Also maintain standard fields
                         city_out["latitude"] = lat_f
                         city_out["longitude"] = lon_f
                     normalized_cities.append(city_out)
@@ -562,11 +563,11 @@ async def process_travel_message(
         response = {
             "type": "message",
             "data": {
-                "message": f"Recibí tu mensaje: {message.get('message', '')}"
+                "message": f"I received your message: {message.get('message', '')}"
             }
         }
         
-        # Enviar la respuesta a través de WebSocket si hay una conexión activa
+        # Send response through WebSocket if there's an active connection
         if message.get('travel_id') in active_connections:
             await active_connections[message['travel_id']].send_text(json.dumps(response))
         
@@ -600,13 +601,13 @@ async def get_travel_messages(
                 detail="Travel not found"
             )
 
-        # Obtener o crear la conversación para este viaje
+        # Get or create conversation for this travel
         conversations = await get_chats_collection()
         conversation = await conversations.find_one({"travel_id": travel_id})
         
         if not conversation:
-            logger.info(f"Creando nueva conversación para viaje {travel_id}")
-            # Crear nueva conversación si no existe
+            logger.info(f"Creating new conversation for travel {travel_id}")
+            # Create new conversation if it doesn't exist
             conversation = {
                 "travel_id": travel_id,
                 "user_id": str(current_user.id),
@@ -615,9 +616,9 @@ async def get_travel_messages(
             }
             result = await conversations.insert_one(conversation)
             conversation["_id"] = result.inserted_id
-            logger.info(f"Conversación creada: {conversation['_id']}")
+            logger.info(f"Conversation created: {conversation['_id']}")
 
-        # Obtener los mensajes de la conversación
+        # Get conversation messages
         messages = await get_messages_collection()
         cursor = messages.find({
             "conversation_id": str(conversation["_id"]),
@@ -627,7 +628,7 @@ async def get_travel_messages(
         message_list = [Message(**doc) async for doc in cursor]
         logger.info(f"Encontrados {len(message_list)} mensajes")
         
-        # Invertir la lista para mostrar los mensajes en orden cronológico
+        # Reverse list to show messages in chronological order
         message_list.reverse()
         
         return message_list
@@ -740,11 +741,11 @@ async def websocket_endpoint(
             await websocket.close(code=4004)
             return
 
-        # Aceptar conexión WebSocket
+        # Accept WebSocket connection
         await websocket.accept()
         logger.info(f"WebSocket connection accepted for user {user_id} and travel {travel_id}")
 
-        # Agregar conexión a la lista de conexiones activas
+        # Add connection to active connections list
         if travel_id not in active_connections:
             active_connections[travel_id] = set()
         active_connections[travel_id].add(websocket)
@@ -764,7 +765,7 @@ async def websocket_endpoint(
                     await websocket.send_json({
                         "type": "error",
                         "data": {
-                            "message": "Mensaje vacío recibido",
+                            "message": "Empty message received",
                             "is_user": False
                         }
                     })
@@ -800,7 +801,7 @@ async def websocket_endpoint(
 
                 # Si la respuesta fue marcada como duplicada, no enviar nada
                 if websocket_response["data"]["intention"] == "duplicate_ignored" or not websocket_response["data"]["content"]:
-                    logger.info("Respuesta duplicada/neutra detectada: no se envía por WS")
+                    logger.info("Duplicate/neutral response detected: not sent via WS")
                     continue
 
                 # Enviar respuesta a todos los clientes, incluido el emisor, con timeout y en paralelo
@@ -810,7 +811,7 @@ async def websocket_endpoint(
 
                 logger.info(f"Enviando broadcast a {len(targets)} clientes (incluye emisor)")
 
-                # Serialización segura (Enums → string)
+                # Safe serialization (Enums → string)
                 safe_text = json.dumps(
                     websocket_response,
                     default=lambda o: getattr(o, 'value', str(o))
@@ -822,7 +823,7 @@ async def websocket_endpoint(
                         logger.info("Mensaje enviado exitosamente a cliente")
                     except Exception as e:
                         logger.error(f"Error enviando mensaje por WebSocket: {e}")
-                        # Remover conexión fallida
+                        # Remove failed connection
                         try:
                             active_connections[travel_id].discard(ws)
                         except Exception:
@@ -833,7 +834,7 @@ async def websocket_endpoint(
         except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected for user {user_id} and travel {travel_id}")
         finally:
-            # Remover conexión de la lista de conexiones activas
+            # Remove connection from active connections list
             if travel_id in active_connections:
                 active_connections[travel_id].remove(websocket)
                 if not active_connections[travel_id]:
@@ -909,7 +910,7 @@ async def create_itinerary_with_ai_matching(
         if travel["user_id"] != str(current_user.id):
             raise HTTPException(status_code=403, detail="Not authorized for this travel")
 
-        # Obtener todos los sitios disponibles del país específico
+        # Get all available sites for the specific country
         from app.database import get_sites_collection
         sites_collection = await get_sites_collection()
         available_sites = await sites_collection.find(
@@ -985,7 +986,7 @@ async def get_available_sites(
         }
         
         if country_code:
-            # Filtrar por código de país en la jerarquía
+            # Filter by country code in hierarchy
             query["hierarchy"] = {"$regex": f"^{country_code}", "$options": "i"}
         
         sites = await sites_collection.find(
@@ -1020,10 +1021,13 @@ async def get_hotel_suggestions(
 ):
     try:
         travels = await get_travels_collection()
-        travel = await travels.find_one({"_id": ObjectId(travel_id)})
-        if travel is None:
-            raise HTTPException(status_code=404, detail="Travel not found")
-        if travel.get("user_id") != str(current_user.id):
+        travel = None
+        try:
+            travel = await travels.find_one({"_id": ObjectId(travel_id)})
+        except Exception:
+            travel = None
+        # Si no se encuentra travel, continuamos y tratamos de operar sobre el itinerario (modo tolerante)
+        if travel is not None and travel.get("user_id") != str(current_user.id):
             raise HTTPException(status_code=403, detail="Not authorized for this travel")
 
         # Intentar servir desde BBDD primero
@@ -1034,7 +1038,7 @@ async def get_hotel_suggestions(
 
         # Si no hay, generar on-demand y devolver
         suggestions = await hotel_suggestions_service.get_suggestions_for_travel(travel_id)
-        # Guardar asincrónicamente (no bloquear respuesta)
+        # Save asynchronously (don't block response)
         try:
             await itineraries.update_one(
                 {"travel_id": travel_id},
@@ -1058,7 +1062,7 @@ async def get_country_code(
     Obtiene el código de país ISO a partir del nombre del país
     """
     try:
-        # Mapeo simple de países a códigos ISO
+        # Simple mapping of countries to ISO codes
         country_mapping = {
             "thailand": "TH",
             "japan": "JP", 
@@ -1106,3 +1110,34 @@ async def get_country_code(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error getting country code: {str(e)}"
         ) 
+
+@router.get("/{travel_id}/transport-plan")
+async def get_transport_plan(
+    travel_id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        travels = await get_travels_collection()
+        travel = await travels.find_one({"_id": ObjectId(travel_id)})
+        if travel is None:
+            raise HTTPException(status_code=404, detail="Travel not found")
+        if travel.get("user_id") != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized for this travel")
+
+        itineraries = await get_itineraries_collection()
+        it = await itineraries.find_one({"travel_id": travel_id})
+        # If there's itinerary and there was travel, validate user again
+        if it and travel is not None and travel.get("user_id") != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized for this travel")
+        if it and it.get("transport_plan"):
+            return {"travel_id": travel_id, "transport_plan": it.get("transport_plan")}
+
+        # Generar on-demand si no existe
+        ok = await transport_plan_service.generate_and_save_for_travel(travel_id)
+        it = await itineraries.find_one({"travel_id": travel_id})
+        return {"travel_id": travel_id, "transport_plan": (it or {}).get("transport_plan")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting transport plan: {e}")
+        raise HTTPException(status_code=500, detail="Error getting transport plan")

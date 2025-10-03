@@ -35,31 +35,31 @@ class ChatModel:
                 max_tokens=5
             )
             
-            print(f"ChatModel inicializado correctamente con deployment: {self.deployment_name}")
+            print(f"ChatModel initialized correctly with deployment: {self.deployment_name}")
         except Exception as e:
-            print(f"Error al inicializar ChatModel: {str(e)}")
+            print(f"Error initializing ChatModel: {str(e)}")
             raise
 
     def generate_response(self, user_input, chat_history=None, travel_config=None):
         try:
-            # Inicializar el historial si es None
+            # Initialize history if None
             if chat_history is None:
                 chat_history = []
             
-            # Si hay configuración de viaje, usar el nuevo sistema de agentes
+            # If there's travel configuration, use the new agent system
             if travel_config:
                 return self._generate_response_with_agents(user_input, chat_history, travel_config)
             
-            # Preparar el historial de chat
+            # Prepare chat history
             messages = []
             if chat_history:
                 for msg in chat_history:
                     messages.append({"role": msg["role"], "content": msg["content"]})
             
-            # Añadir el mensaje actual del usuario
+            # Add current user message
             messages.append({"role": "user", "content": user_input})
 
-            # Llamar a la API de Azure OpenAI
+            # Call Azure OpenAI API
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=messages,
@@ -71,36 +71,36 @@ class ChatModel:
                 stop=None
             )
 
-            # Obtener la respuesta
+            # Get response
             assistant_message = response.choices[0].message.content
 
-            # Actualizar el historial
+            # Update history
             chat_history.append({"role": "user", "content": user_input})
             chat_history.append({"role": "assistant", "content": assistant_message})
 
-            # Mantener solo los últimos 10 mensajes para evitar tokens excesivos
+            # Keep only last 10 messages to avoid excessive tokens
             if len(chat_history) > 10:
                 chat_history = chat_history[-10:]
 
             return assistant_message, chat_history
 
         except Exception as e:
-            print(f"Error en generate_response: {str(e)}")
-            error_message = f"Lo siento, ha ocurrido un error al procesar tu mensaje: {str(e)}"
+            print(f"Error in generate_response: {str(e)}")
+            error_message = f"Sorry, an error occurred while processing your message: {str(e)}"
             return error_message, chat_history or []
 
     def _generate_response_with_agents(self, user_input, chat_history, travel_config):
         """
-        Genera respuesta usando el sistema de agentes con configuración de viaje.
+        Generates response using the agent system with travel configuration.
         """
         try:
-            # Gating simple: si el input es claramente un saludo o genérico, no dispares flujo
+            # Simple gating: if input is clearly a greeting or generic, don't trigger flow
             lowered = (user_input or "").strip().lower()
             greetings = ["hola", "hola!", "hola :)", "hi", "hello", "buenas", "buenos dias", "buenas tardes", "buenas noches"]
             if lowered in greetings or len(lowered) <= 3:
                 assistant_message = (
-                    "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? "
-                    "Dime país y duración (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía)."
+                    "Hi! Would you like me to create an itinerary or modify an existing one? "
+                    "Tell me the country and duration (e.g., 14 days) and the style (beach, history, nature, food)."
                 )
                 chat_history.append({"role": "user", "content": user_input})
                 chat_history.append({"role": "assistant", "content": assistant_message})
@@ -112,17 +112,17 @@ class ChatModel:
             from datetime import datetime
             import asyncio
             
-            # Extraer configuración del viaje
+            # Extract travel configuration
             travel_id = travel_config.get("travel_id", "default")
             user_id = travel_config.get("user_email", "default")
             start_date = travel_config.get("start_date")
             total_days = travel_config.get("total_days", 7)
             country = travel_config.get("country", "thailand")
             
-            # Crear instancia del workflow
+            # Create workflow instance
             workflow = SmartItineraryWorkflow()
             
-            # Procesar con el workflow inteligente usando asyncio
+            # Process with intelligent workflow using asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -135,23 +135,23 @@ class ChatModel:
             finally:
                 loop.close()
             
-            # Obtener respuesta
-            assistant_message = result.get("message", "No se pudo generar respuesta")
+            # Get response
+            assistant_message = result.get("message", "Could not generate response")
             
-            # Actualizar historial
+            # Update history
             chat_history.append({"role": "user", "content": user_input})
             chat_history.append({"role": "assistant", "content": assistant_message})
             
-            # Mantener solo los últimos 10 mensajes
+            # Keep only last 10 messages
             if len(chat_history) > 10:
                 chat_history = chat_history[-10:]
             
             return assistant_message, chat_history
             
         except Exception as e:
-            print(f"Error en _generate_response_with_agents: {str(e)}")
-            error_message = f"Lo siento, ha ocurrido un error al procesar tu solicitud de viaje: {str(e)}"
+            print(f"Error in _generate_response_with_agents: {str(e)}")
+            error_message = f"Sorry, an error occurred while processing your travel request: {str(e)}"
             return error_message, chat_history or []
 
-# Instancia global del modelo
+# Global model instance
 chat_model = ChatModel() 

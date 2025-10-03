@@ -16,18 +16,18 @@ logger = logging.getLogger(__name__)
 
 class HotelSuggestionsService:
     """
-    Sugerencias de hoteles por ciudad basadas en el itinerario.
-    - Obtiene ciudades y fechas (check-in/check-out) del itinerario por travel_id
-    - Usa LLM para proponer 3–5 hoteles por ciudad (solo strings)
-    - Enriquecemos con imagen de Wikimedia cuando sea posible
-    - Generamos deeplinks a Booking con fechas para que el usuario vea disponibilidad real
+    Hotel suggestions by city based on the itinerary.
+    - Gets cities and dates (check-in/check-out) from the itinerary by travel_id
+    - Uses LLM to propose 3-5 hotels per city (strings only)
+    - Enriches with Wikimedia image when possible
+    - Generates deeplinks to Booking with dates so user can see real availability
     """
 
     def __init__(self) -> None:
-        # Cache simple en memoria con TTL
+        # Simple in-memory cache with TTL
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._cache_ttl_seconds: int = 6 * 3600
-        # Limitar concurrencia (por cortesía de APIs públicas)
+        # Limit concurrency (courtesy of public APIs)
         self._city_sem = asyncio.Semaphore(3)
         self._img_sem = asyncio.Semaphore(5)
 
@@ -56,8 +56,8 @@ class HotelSuggestionsService:
 
     async def generate_and_save_for_travel(self, travel_id: str) -> bool:
         """
-        Genera sugerencias y las guarda embebidas en el documento del itinerario
-        para respuesta instantánea en el endpoint y para frontend.
+        Generates suggestions and saves them embedded in the itinerary document
+        for instant response in the endpoint and for frontend.
         """
         try:
             suggestions = await self.get_suggestions_for_travel(travel_id)
@@ -113,7 +113,7 @@ class HotelSuggestionsService:
 
         enriched_list = await asyncio.gather(*[ _enrich(h) for h in hotels ], return_exceptions=False)
 
-        # Generar días individuales
+        # Generate individual days
         days_array: List[Dict[str, Any]] = []
         try:
             ci = datetime.fromisoformat(check_in)
@@ -156,7 +156,7 @@ class HotelSuggestionsService:
         if not check_in:
             check_in = datetime.utcnow().date().isoformat()
         if not check_out:
-            # Por defecto +2 días desde check_in
+            # By default +2 days from check_in
             base_dt = datetime.fromisoformat(check_in) if isinstance(check_in, str) else datetime.utcnow()
             check_out = (base_dt + timedelta(days=2)).date().isoformat()
         return check_in, check_out
@@ -178,13 +178,13 @@ class HotelSuggestionsService:
             azure_endpoint=(settings.AZURE_OPENAI_ENDPOINT if str(settings.AZURE_OPENAI_ENDPOINT).startswith("http") else f"https://{settings.AZURE_OPENAI_ENDPOINT}")
         )
         system = (
-            "Eres un experto en hoteles. Devuelve SOLO JSON válido con key 'hotels' (3-5 items).\n"
-            "Cada hotel: {name, area?:string, price_tier?:'budget'|'mid'|'premium', notes?:string}."
+            "You are a hotel expert. Return ONLY valid JSON with key 'hotels' (3-5 items).\n"
+            "Each hotel: {name, area?:string, price_tier?:'budget'|'mid'|'premium', notes?:string}."
         )
         user = (
-            f"Ciudad: {city}\n"
-            f"Noches: {nights}\n"
-            "Sugiere 3-5 hoteles conocidos/populares con variedad de precio y zonas."
+            f"City: {city}\n"
+            f"Nights: {nights}\n"
+            "Suggest 3-5 known/popular hotels with price and area variety."
         )
         resp = client.chat.completions.create(
             model=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
@@ -206,7 +206,7 @@ class HotelSuggestionsService:
 
     async def _wikimedia_image_for_query(self, query: str) -> Optional[str]:
         try:
-            # Buscar página relacionada
+            # Search for related page
             search_params = {
                 "action": "query",
                 "format": "json",
@@ -221,7 +221,7 @@ class HotelSuggestionsService:
                 return None
             page_title = hits[0].get("title")
 
-            # Obtener thumbnail
+            # Get thumbnail
             image_params = {
                 "action": "query",
                 "format": "json",
@@ -264,7 +264,7 @@ class HotelSuggestionsService:
             }
             return f"https://www.booking.com/search.html?{urlencode(params)}"
         except Exception:
-            # Fallback mínimo
+            # Minimal fallback
             safe_query = urlencode({"q": f"{hotel_name} {city}"})
             return f"https://www.google.com/search?{safe_query}"
 

@@ -13,13 +13,13 @@ import {
 } from '@mui/material';
 import ChatIcon from '@mui/icons-material/Chat';
 import MapIcon from '@mui/icons-material/Map';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
 import HotelIcon from '@mui/icons-material/Hotel';
-import FlightIcon from '@mui/icons-material/Flight';
+import DirectionsTransitIcon from '@mui/icons-material/DirectionsTransit';
 import ChatSection from './ChatSection';
 import ItinerarySection from './ItinerarySection';
 import TravelList from './TravelList';
 import HotelsSection from './HotelsSection';
+import TransportSection from './TransportSection';
 
 const MainCanvas = () => {
     const [selectedItem, setSelectedItem] = useState('chat');
@@ -35,7 +35,8 @@ const MainCanvas = () => {
                 const token = localStorage.getItem('token');
                 if (!token) return;
 
-                const response = await fetch('http://localhost:8000/api/travels', {
+                const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+                const response = await fetch(`${API_URL}/api/travels`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -81,9 +82,8 @@ const MainCanvas = () => {
     const menuItems = [
         { text: 'Chat', icon: <ChatIcon />, value: 'chat' },
         { text: 'Itinerary', icon: <MapIcon />, value: 'itinerary' },
-        { text: 'Visits', icon: <LocationOnIcon />, value: 'visit' },
         { text: 'Hotels', icon: <HotelIcon />, value: 'hotels' },
-        { text: 'Flights', icon: <FlightIcon />, value: 'flights' },
+        { text: 'Transports', icon: <DirectionsTransitIcon />, value: 'transport' },
     ];
 
     console.log('Current selectedTravel:', selectedTravel);
@@ -321,6 +321,38 @@ const MainCanvas = () => {
                                 </Typography>
                                 <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
                                     Please select a trip to view hotel suggestions.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+                )}
+
+                {selectedItem === 'transport' && (
+                    <Box sx={{
+                        flex: 1,
+                        p: 3,
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: 3,
+                        m: 2,
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        {selectedTravel ? (
+                            <TransportSection travelId={selectedTravel._id} />
+                        ) : (
+                            <Box sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '100%',
+                                textAlign: 'center'
+                            }}>
+                                <Typography variant="h5" sx={{ mb: 2, color: theme.palette.text.secondary }}>
+                                    No Trip Selected
+                                </Typography>
+                                <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
+                                    Please select a trip to view transport plan.
                                 </Typography>
                             </Box>
                         )}

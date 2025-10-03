@@ -8,17 +8,17 @@ from datetime import datetime
 from app.config import settings
 
 class JSONFormatter(logging.Formatter):
-    """Formateador de logs en JSON"""
+    """JSON log formatter"""
     
     def format(self, record: logging.LogRecord) -> str:
         """
-        Formatear registro de log a JSON
+        Format log record to JSON
         
         Args:
-            record: Registro de log
+            record: Log record
         
         Returns:
-            str: Registro formateado en JSON
+            str: Formatted record in JSON
         """
         log_data = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -29,7 +29,7 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno
         }
         
-        # Agregar excepción si existe
+        # Add exception if exists
         if record.exc_info:
             log_data["exception"] = {
                 "type": record.exc_info[0].__name__,
@@ -37,7 +37,7 @@ class JSONFormatter(logging.Formatter):
                 "traceback": self.formatException(record.exc_info)
             }
         
-        # Agregar datos extra si existen
+        # Add extra data if exists
         if hasattr(record, "extra"):
             log_data.update(record.extra)
         
@@ -50,27 +50,27 @@ def setup_logging(
     backup_count: int = 5
 ) -> None:
     """
-    Configurar sistema de logging
+    Configure logging system
     
     Args:
-        log_file: Ruta del archivo de log
-        log_level: Nivel de logging
-        max_bytes: Tamaño máximo del archivo
-        backup_count: Número de archivos de respaldo
+        log_file: Log file path
+        log_level: Logging level
+        max_bytes: Maximum file size
+        backup_count: Number of backup files
     """
-    # Crear directorio de logs si no existe
+    # Create logs directory if it doesn't exist
     if log_file:
         log_path = Path(log_file).parent
         log_path.mkdir(parents=True, exist_ok=True)
     
-    # Configurar formato
+    # Configure format
     json_formatter = JSONFormatter()
     
-    # Configurar handler de consola
+    # Configure console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(json_formatter)
     
-    # Configurar handler de archivo si se especifica
+    # Configure file handler if specified
     handlers = [console_handler]
     if log_file:
         file_handler = RotatingFileHandler(
@@ -81,7 +81,7 @@ def setup_logging(
         file_handler.setFormatter(json_formatter)
         handlers.append(file_handler)
     
-    # Configurar logger raíz
+    # Configure root logger
     logging.basicConfig(
         level=log_level,
         handlers=handlers
@@ -89,13 +89,13 @@ def setup_logging(
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Obtener logger con nombre
+    Get logger with name
     
     Args:
-        name: Nombre del logger
+        name: Logger name
     
     Returns:
-        logging.Logger: Logger configurado
+        logging.Logger: Configured logger
     """
     return logging.getLogger(name)
 
@@ -106,13 +106,13 @@ def log_error(
     extra: Optional[Dict[str, Any]] = None
 ) -> None:
     """
-    Registrar error con detalles
+    Log error with details
     
     Args:
-        logger: Logger a usar
-        message: Mensaje de error
-        error: Excepción
-        extra: Datos adicionales
+        logger: Logger to use
+        message: Error message
+        error: Exception
+        extra: Additional data
     """
     extra = extra or {}
     extra.update({
@@ -412,10 +412,10 @@ class DatabaseLogger:
         else:
             self.logger.debug(f"Database operation completed: {log_data}")
 
-# Instancias de loggers
+# Logger instances
 request_logger = RequestLogger()
 security_logger = SecurityLogger()
 database_logger = DatabaseLogger()
 
-# Configurar logger por defecto
+# Configure default logger
 logger = get_logger(__name__) 

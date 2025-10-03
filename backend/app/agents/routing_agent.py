@@ -35,18 +35,18 @@ class RoutingAgent:
             # Crear grafo con las ciudades
             G = self._create_city_graph(cities)
             
-            # Calcular ruta óptima usando diferentes algoritmos
+            # Calculate optimal route using different algorithms
             routes = {}
             
             # 1. TSP (Traveling Salesman Problem) - Ruta circular
             tsp_route = self._solve_tsp(G, cities)
             routes["tsp"] = tsp_route
             
-            # 2. Ruta más corta entre puntos específicos
+            # 2. Shortest route between specific points
             shortest_route = self._find_shortest_path(G, cities)
             routes["shortest"] = shortest_route
             
-            # 3. Ruta basada en proximidad geográfica
+            # 3. Route based on geographical proximity
             proximity_route = self._route_by_proximity(cities)
             routes["proximity"] = proximity_route
             
@@ -101,7 +101,7 @@ class RoutingAgent:
         Resuelve el problema del viajante (TSP) para encontrar la ruta circular óptima.
         """
         try:
-            # Usar algoritmo de aproximación para TSP
+            # Use approximation algorithm for TSP
             if len(cities) <= 2:
                 route_cities = cities
                 total_distance = 0
@@ -111,7 +111,7 @@ class RoutingAgent:
                         (cities[1]["latitude"], cities[1]["longitude"])
                     ).kilometers
             else:
-                # Algoritmo de aproximación: Nearest Neighbor
+                # Approximation algorithm: Nearest Neighbor
                 route_cities = self._nearest_neighbor_tsp(cities)
                 total_distance = self._calculate_route_distance(route_cities)
             
@@ -184,7 +184,7 @@ class RoutingAgent:
                     "algorithm": "shortest_path"
                 }
             
-            # Usar Dijkstra para encontrar la ruta más corta
+            # Use Dijkstra to find the shortest route
             start_city = cities[0]["name"]
             end_city = cities[-1]["name"]
             
@@ -233,7 +233,7 @@ class RoutingAgent:
                     "algorithm": "proximity"
                 }
             
-            # Ordenar ciudades por proximidad al centro geográfico
+            # Sort cities by proximity to geographical center
             center_lat = np.mean([c.get("latitude", 0) for c in cities])
             center_lon = np.mean([c.get("longitude", 0) for c in cities])
             
@@ -297,14 +297,14 @@ class RoutingAgent:
         Optimiza la ruta considerando tiempo disponible.
         """
         try:
-            # Calcular tiempo estimado por ciudad (asumiendo 1 día por ciudad)
+            # Calculate estimated time per city (assuming 1 day per city)
             estimated_days = len(cities)
             
             if estimated_days <= max_days:
                 # Si hay tiempo suficiente, usar ruta completa
                 return self.calculate_route(cities)
             else:
-                # Si no hay tiempo suficiente, seleccionar ciudades más importantes
+                # If not enough time, select most important cities
                 # Por ahora, seleccionar las primeras max_days ciudades
                 selected_cities = cities[:max_days]
                 return self.calculate_route(selected_cities)

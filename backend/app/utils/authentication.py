@@ -9,25 +9,25 @@ from app.config import settings
 
 load_dotenv()
 
-# Si no hay SECRET_KEY en el .env, usar una por defecto para desarrollo
-SECRET_KEY = os.getenv("SECRET_KEY", "tu_clave_secreta_por_defecto_para_desarrollo")
+# If there's no SECRET_KEY in .env, use a default one for development
+SECRET_KEY = os.getenv("SECRET_KEY", "your_default_secret_key_for_development")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Usar OAuth2PasswordBearer para extraer el token del header Authorization
+# Use OAuth2PasswordBearer to extract token from Authorization header
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/login")
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    print(f"Verificando contraseña: {plain_password} contra hash: {hashed_password}")
+    print(f"Verifying password: {plain_password} against hash: {hashed_password}")
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict):
-    """Crea un token de acceso con datos."""
+    """Creates an access token with data."""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})

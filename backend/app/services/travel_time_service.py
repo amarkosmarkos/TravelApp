@@ -1,5 +1,5 @@
 """
-Servicio para calcular tiempos de viaje entre ciudades.
+Service for calculating travel times between cities.
 """
 
 import math
@@ -10,45 +10,49 @@ logger = logging.getLogger(__name__)
 
 class TravelTimeService:
     """
-    Calcula tiempos de viaje realistas entre ciudades.
+    Calculates realistic travel times between cities.
     """
     
     def __init__(self):
-        # Velocidades promedio en km/h
+        # Average speeds in km/h (heuristics)
         self.speeds = {
-            "local_bus": 60,      # Bus local
-            "intercity_bus": 80,  # Bus interurbano
-            "car": 90,            # Coche
-            "flight": 800         # Velocidad promedio avión
+            "local_bus": 50,       # Urban/local bus
+            "intercity_bus": 75,   # Intercity bus
+            "private_car": 85,     # Private transport
+            "train": 120,          # Regional/medium distance train
+            "flight_short": 750,   # Short/medium range plane
+            "flight_long": 850     # Long range plane
         }
         
-        # Tiempos adicionales
+        # Additional times
         self.additional_times = {
-            "airport_checkin": 2,    # Horas para check-in + ir al aeropuerto
-            "bus_station": 0.5,      # Horas para ir a estación de bus
-            "local_transport": 0.25  # Horas para transporte local
+            "airport_checkin_domestic": 1.5,  # check-in + airport transfer (domestic)
+            "airport_checkin_international": 2.5,  # international
+            "bus_station": 0.5,      # bus station arrival/departure
+            "train_station": 0.5,    # train station arrival/departure
+            "local_transport": 0.25  # local margin
         }
     
     def calculate_distance_km(self, coord1: Dict[str, float], coord2: Dict[str, float]) -> float:
         """
-        Calcula distancia en km entre dos coordenadas usando fórmula de Haversine.
+        Calculates distance in km between two coordinates using Haversine formula.
         """
         try:
             lat1, lon1 = coord1["latitude"], coord1["longitude"]
             lat2, lon2 = coord2["latitude"], coord2["longitude"]
             
-            # Convertir a radianes
+            # Convert to radians
             lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
             
-            # Diferencia de coordenadas
+            # Coordinate difference
             dlat = lat2 - lat1
             dlon = lon2 - lon1
             
-            # Fórmula de Haversine
+            # Haversine formula
             a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
             c = 2 * math.asin(math.sqrt(a))
             
-            # Radio de la Tierra en km
+            # Earth radius in km
             r = 6371
             
             return c * r
@@ -78,24 +82,27 @@ class TravelTimeService:
             # Calcular distancia
             distance = self.calculate_distance_km(coord1, coord2)
             
-            # Determinar método de transporte y tiempo
-            if distance < 100:
-                # Bus/coche local
-                method = "local_bus"
-                duration = distance / self.speeds[method]
+            # Determine transport method and time (heuristic by segments)
+            if distance < 80:
+                method = "private_car"
+                duration = distance / self.speeds[method] + self.additional_times["local_transport"]
                 airport_time = 0
-                
-            elif distance < 500:
-                # Bus interurbano
+            elif distance < 200:
                 method = "intercity_bus"
-                duration = distance / self.speeds[method]
-                airport_time = self.additional_times["bus_station"]
-                
-            else:
-                # Avión obligatorio para distancias largas
+                duration = distance / self.speeds[method] + self.additional_times["bus_station"]
+                airport_time = 0
+            elif distance < 700:
+                method = "train"
+                duration = distance / self.speeds[method] + self.additional_times["train_station"]
+                airport_time = 0
+            elif distance < 2000:
                 method = "flight"
-                duration = 4  # 4 horas de vuelo para distancias > 500km
-                airport_time = self.additional_times["airport_checkin"]
+                duration = distance / self.speeds["flight_short"]
+                airport_time = self.additional_times["airport_checkin_domestic"]
+            else:
+                method = "flight"
+                duration = distance / self.speeds["flight_long"]
+                airport_time = self.additional_times["airport_checkin_international"]
             
             total_time = duration + airport_time
             
@@ -144,7 +151,7 @@ class TravelTimeService:
                 "travel_info": travel_info
             })
         
-        # Convertir a días
+        # Convert to days
         total_days = total_time / 24
         
         return {

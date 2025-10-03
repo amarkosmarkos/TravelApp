@@ -3,12 +3,29 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+function isMockEnabled() {
+  try {
+    const envFlag = (typeof process !== 'undefined' && process && process.env && process.env.REACT_APP_MOCK);
+    const winFlag = (typeof window !== 'undefined' && window.REACT_APP_MOCK);
+    const val = String(envFlag || winFlag || 'true').toLowerCase();
+    return val === 'true';
+  } catch (e) {
+    return true;
+  }
+}
+
 // For routes that require authentication (e.g., /main, /profile)
 export const ProtectedRoute = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(null);
+  const mock = isMockEnabled();
+  const [isAuthenticated, setIsAuthenticated] = useState(mock ? true : null);
   const location = useLocation();
 
   useEffect(() => {
+    if (mock) {
+      setIsAuthenticated(true);
+      return;
+    }
+
     const verifyAuth = async () => {
       const token = localStorage.getItem('token');
       console.log('Token in ProtectedRoute:', token);
@@ -42,7 +59,7 @@ export const ProtectedRoute = ({ children }) => {
     };
 
     verifyAuth();
-  }, [location.pathname]);
+  }, [location.pathname, mock]);
 
   if (isAuthenticated === null) {
     return <div>Verifying authentication...</div>;
@@ -58,11 +75,18 @@ export const ProtectedRoute = ({ children }) => {
 
 // For routes that should only be accessible when NOT logged in (e.g., /login, /register)
 export const PublicRoute = ({ children }) => {
-  const [isChecking, setIsChecking] = useState(true);
+  const mock = isMockEnabled();
+  const [isChecking, setIsChecking] = useState(mock ? false : true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
+    if (mock) {
+      setIsChecking(false);
+      setIsAuthenticated(false);
+      return;
+    }
+
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
       console.log('Token in PublicRoute:', token);
@@ -96,10 +120,14 @@ export const PublicRoute = ({ children }) => {
     };
 
     checkAuth();
-  }, [location.pathname]);
+  }, [location.pathname, mock]);
 
   if (isChecking) {
     return <div>Verifying authentication...</div>;
+  }
+
+  if (mock) {
+    return <Navigate to="/main" state={{ from: location }} replace />;
   }
 
   if (isAuthenticated) {

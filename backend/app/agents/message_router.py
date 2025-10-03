@@ -334,7 +334,7 @@ Responde SOLO con el tipo en mayúsculas (ej: CREATE_ITINERARY)
         Extrae el país del mensaje del usuario.
         """
         try:
-            # Mapeo de países
+            # Country mapping
             country_mapping = {
                 "thailand": "thailand", "tailandia": "thailand", "tailandés": "thailand",
                 "japan": "japan", "japón": "japan", "japon": "japan", "japones": "japan",
@@ -346,10 +346,10 @@ Responde SOLO con el tipo en mayúsculas (ej: CREATE_ITINERARY)
                 "usa": "usa", "united states": "usa", "estados unidos": "usa", "america": "usa"
             }
             
-            # Convertir a minúsculas para búsqueda
+            # Convert to lowercase for search
             message_lower = message.lower()
             
-            # Buscar países en el mensaje
+            # Search for countries in the message
             for country_key, country_code in country_mapping.items():
                 if country_key in message_lower:
                     return country_code
@@ -369,19 +369,19 @@ Responde SOLO con el tipo en mayúsculas (ej: CREATE_ITINERARY)
             # Clasificar el mensaje
             classification = await self.classify_message(message, context)
             
-            # Extraer el país del mensaje
+            # Extract country from message
             country = await self._extract_country_from_message(message)
             logger.info(f"País extraído del mensaje: {country}")
             
-            # Decidir acción según intención (gating)
+            # Decide action based on intention (gating)
             message_type = classification.get("type", MessageType.GENERAL_CHAT)
             confidence = classification.get("confidence", 0.0)
             type_str = message_type.value if hasattr(message_type, 'value') else str(message_type)
 
-            # Umbral de confianza para acciones automáticas
+            # Confidence threshold for automatic actions
             auto_threshold = 0.75
 
-            # Solo crear/modificar si la intención es clara
+            # Only create/modify if intention is clear
             if type_str in (MessageType.CREATE_ITINERARY.value, MessageType.MODIFY_ITINERARY.value) or (
                 message_type in (MessageType.CREATE_ITINERARY, MessageType.MODIFY_ITINERARY)
             ):
@@ -403,7 +403,7 @@ Responde SOLO con el tipo en mayúsculas (ej: CREATE_ITINERARY)
                 }
                 return response
 
-            # Para búsquedas/optimización: responder sin alterar itinerarios
+            # For searches/optimization: respond without altering itineraries
             if type_str == MessageType.SEARCH_CITIES.value or message_type == MessageType.SEARCH_CITIES:
                 return {
                     "message": "¿Qué país o ciudad quieres explorar? Puedo mostrarte opciones y luego crear el itinerario si te encaja.",
@@ -430,7 +430,7 @@ Responde SOLO con el tipo en mayúsculas (ej: CREATE_ITINERARY)
                     }
                 }
 
-            # Si es chat general o confianza baja: pedir aclaración en vez de crear nada
+            # If general chat or low confidence: ask for clarification instead of creating anything
             if (type_str == MessageType.GENERAL_CHAT.value or message_type == MessageType.GENERAL_CHAT) or confidence < auto_threshold:
                 return {
                     "message": "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? Dime país y duración aproximada (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía).",

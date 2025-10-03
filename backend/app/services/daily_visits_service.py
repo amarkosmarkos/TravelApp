@@ -33,8 +33,8 @@ class DaySchedule(BaseModel):
 
 class DailyVisitsService:
     """
-    Servicio para generar y guardar visitas diarias (daily_visits) anidadas en el itinerario.
-    Mantiene compatibilidad: si falla LLM o no está configurado, usa heurística determinista.
+    Service for generating and saving daily visits (daily_visits) nested in the itinerary.
+    Maintains compatibility: if LLM fails or is not configured, uses deterministic heuristics.
     """
 
     def __init__(self) -> None:
@@ -50,7 +50,7 @@ class DailyVisitsService:
 
             daily_visits = await self._generate_daily_visits_for_itinerary(itinerary)
 
-            # Guardar embebido
+            # Save embedded
             await itineraries.update_one(
                 {"travel_id": travel_id},
                 {"$set": {"daily_visits": [dv.model_dump() for dv in daily_visits], "updated_at": datetime.utcnow()}}
@@ -72,7 +72,7 @@ class DailyVisitsService:
             arrival_iso = city.get("arrival_dt")
             departure_iso = city.get("departure_dt")
 
-            # Calcular nº de días por ciudad
+            # Calculate number of days per city
             num_days = 1
             try:
                 if arrival_iso and departure_iso:
@@ -81,7 +81,7 @@ class DailyVisitsService:
                     total_hours = max((dep - arr).total_seconds() / 3600.0, 0.0)
                     num_days = max(1, int((total_hours + 23.999) // 24))
                 else:
-                    # fallback por stay_hours o days
+                    # fallback by stay_hours or days
                     stay_hours = city.get("stay_hours")
                     if stay_hours:
                         num_days = max(1, int((float(stay_hours) + 23.999) // 24))
@@ -90,13 +90,13 @@ class DailyVisitsService:
             except Exception:
                 num_days = int(city.get("days") or 1)
 
-            # Ya NO consultamos BD ni generamos candidatos: solo se extraen strings desde el itinerario global
+            # We NO LONGER query DB or generate candidates: only extract strings from the global itinerary
 
-            # Heurística: 4 visitas por día (mañana, mediodía, tarde, noche)
+            # Heuristic: 4 visits per day (morning, midday, afternoon, evening)
             default_slots = ["09:00", "12:30", "16:00", "19:30"]
             cand_idx = 0
 
-            # Punto de inicio
+            # Starting point
             start_dt = None
             try:
                 if arrival_iso:
@@ -106,14 +106,14 @@ class DailyVisitsService:
 
             for i in range(num_days):
                 day_date = (start_dt + timedelta(days=i)) if start_dt else datetime.utcnow()
-                # Intentar generación LLM por día; si falla, usar heurística
+                # Try LLM generation per day; if it fails, use heuristics
                 items: List[VisitItem] = []
                 day_window = {
                     "start": (day_date.replace(hour=9, minute=0, second=0, microsecond=0)).isoformat(),
                     "end": (day_date.replace(hour=21, minute=0, second=0, microsecond=0)).isoformat()
                 }
 
-                # ÚNICO paso: extracción desde el texto completo del itinerario
+                # ONLY step: extraction from the complete itinerary text
                 extracted_items: List[Dict[str, Any]] = []
                 if itinerary_text:
                     try:
@@ -126,7 +126,7 @@ class DailyVisitsService:
                                     id=f"visit-{current_day_index}-{idx}",
                                     time=it.get("time") or default_slots[min(idx-1, len(default_slots)-1)],
                                     place_id=None,
-                                    place_name=it.get("place_name", f"Actividad en {city_name}"),
+                                    place_name=it.get("place_name", f"Activity in {city_name}"),
                                     category=it.get("category", "visit"),
                                     coordinates=None,
                                     duration_min=int(it.get("duration_min") or 90)
@@ -134,7 +134,7 @@ class DailyVisitsService:
                     except Exception as e:
                         logger.warning(f"Extraction from itinerary text failed: {e}")
 
-                # Si no hay extracción, no inventamos ni consultamos nada → el día queda sin items
+                # If no extraction, we don't invent or query anything → the day remains without items
 
                 day_schedule = DaySchedule(
                     day_index=current_day_index,
@@ -150,8 +150,8 @@ class DailyVisitsService:
 
     def _extract_city_items_from_itinerary_text(self, city: str, window: Dict[str, str], itinerary_text: str) -> List[Dict[str, Any]]:
         """
-        Usa LLM para extraer items (time, place_name, category?, duration_min?) del texto completo del itinerario
-        solo para la ciudad indicada y el rango horario aproximado del día. Devuelve lista de dicts.
+        Uses LLM to extract items (time, place_name, category?, duration_min?) from the complete itinerary text
+        only for the specified city and approximate time range of the day. Returns list of dicts.
         """
         try:
             from openai import AzureOpenAI
@@ -162,13 +162,13 @@ class DailyVisitsService:
             )
 
             system = (
-                "Eres un extractor de entidades de itinerarios. Devuelve SOLO JSON válido con 'items'.\n"
-                "Cada item: {time:'HH:MM' opcional, place_name:string, category?:string, duration_min?:number}.\n"
-                "No inventes ids, no devuelvas HTML. Limítate a la ciudad especificada."
+                "You are an itinerary entity extractor. Return ONLY valid JSON with 'items'.\n"
+                "Each item: {time:'HH:MM' optional, place_name:string, category?:string, duration_min?:number}.\n"
+                "Don't invent ids, don't return HTML. Limit yourself to the specified city."
             )
             user = (
-                f"Texto de itinerario completo (puede incluir varias ciudades):\n\n{itinerary_text}\n\n"
-                f"Extrae SOLO las actividades para la ciudad '{city}'. Si hay horas, respétalas; si no, infiere turnos (mañana/mediodía/tarde/noche)."
+                f"Complete itinerary text (may include multiple cities):\n\n{itinerary_text}\n\n"
+                f"Extract ONLY activities for the city '{city}'. If there are times, respect them; if not, infer shifts (morning/midday/afternoon/evening)."
             )
 
             resp = client.chat.completions.create(
@@ -185,10 +185,10 @@ class DailyVisitsService:
             cleaned = re.sub(r"```[a-zA-Z]*", "", content).replace("```", "").strip()
             data = json.loads(cleaned)
             items = data.get("items", [])
-            # Normalización mínima
+            # Minimal normalization
             out: List[Dict[str, Any]] = []
             for it in items:
-                name = it.get("place_name") or it.get("name") or "Actividad"
+                name = it.get("place_name") or it.get("name") or "Activity"
                 time_val = it.get("time") or ""
                 cat = it.get("category") or "visit"
                 dur = it.get("duration_min")
@@ -205,7 +205,7 @@ class DailyVisitsService:
 
     def _map_items_to_candidates(self, items: List[Dict[str, Any]], candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Asigna place_id/coords a los items intentando hacer match por similitud con candidatos. Devuelve items normalizados.
+        Assigns place_id/coords to items trying to match by similarity with candidates. Returns normalized items.
         """
         def similarity(a: str, b: str) -> float:
             return SequenceMatcher(None, (a or "").lower(), (b or "").lower()).ratio()
@@ -220,7 +220,7 @@ class DailyVisitsService:
                 if score > best_score:
                     best = c
                     best_score = score
-            if best is not None and best_score >= 0.72:  # umbral razonable
+            if best is not None and best_score >= 0.72:  # reasonable threshold
                 mapped.append({
                     "time": it.get("time"),
                     "place_id": best.get("id"),
@@ -230,7 +230,7 @@ class DailyVisitsService:
                     "duration_min": it.get("duration_min")
                 })
             else:
-                # Mantener como string sin ID si no hay match
+                # Keep as string without ID if no match
                 mapped.append({
                     "time": it.get("time"),
                     "place_id": None,
@@ -243,8 +243,8 @@ class DailyVisitsService:
 
     def _generate_day_with_llm(self, city: str, window: Dict[str, str], candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Usa LLM para proponer un listado de visitas con horas. No requiere enlazar a BD; si hay candidatos, se sugieren por nombre.
-        Devuelve lista de dicts con keys: time, place_name, category, coordinates?, duration_min?
+        Uses LLM to propose a list of visits with times. Doesn't require linking to DB; if there are candidates, they are suggested by name.
+        Returns list of dicts with keys: time, place_name, category, coordinates?, duration_min?
         """
         try:
             from openai import AzureOpenAI
@@ -270,16 +270,16 @@ class DailyVisitsService:
             }
 
             system = (
-                "Eres un planificador de visitas. Devuelve SOLO JSON con un array 'items'\n"
-                "Cada item: {time:'HH:MM', place_name:string, category?:string, duration_min?:number}.\n"
-                "No inventes ids ni HTML. Si no hay candidatos, crea nombres genéricos."
+                "You are a visit planner. Return ONLY JSON with an 'items' array\n"
+                "Each item: {time:'HH:MM', place_name:string, category?:string, duration_min?:number}.\n"
+                "Don't invent ids or HTML. If there are no candidates, create generic names."
             )
 
             resp = client.chat.completions.create(
                 model=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
                 messages=[
                     {"role": "system", "content": system},
-                    {"role": "user", "content": f"Genera visitas para {city} en {window['start']} a {window['end']}. Candidatos: {sites_brief}"}
+                    {"role": "user", "content": f"Generate visits for {city} from {window['start']} to {window['end']}. Candidates: {sites_brief}"}
                 ],
                 temperature=0.2,
                 max_tokens=500
@@ -289,7 +289,7 @@ class DailyVisitsService:
             cleaned = re.sub(r"```[a-zA-Z]*", "", content).replace("```", "").strip()
             data = json.loads(cleaned)
             items = data.get("items", [])
-            # Normalizar coordenadas si vienen
+            # Normalize coordinates if they come
             for it in items:
                 coords = it.get("coordinates")
                 if isinstance(coords, dict):

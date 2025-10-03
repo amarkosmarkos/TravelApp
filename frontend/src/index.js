@@ -1,5 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+// Load mocks as early as possible (must be before other app code)
+import './mock/demoMock';
+import './mock/axiosMock';
+
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';

@@ -8,14 +8,14 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 class Database:
-    """Clase para manejo de base de datos"""
+    """Class for database management"""
     
     def __init__(self):
         self.client: Optional[AsyncIOMotorClient] = None
         self.db: Optional[AsyncIOMotorDatabase] = None
     
     async def connect(self) -> None:
-        """Conectar a la base de datos"""
+        """Connect to the database"""
         try:
             self.client = AsyncIOMotorClient(settings.MONGODB_URL)
             self.db = self.client[settings.DATABASE_NAME]
@@ -26,41 +26,41 @@ class Database:
             raise
     
     async def close(self) -> None:
-        """Cerrar conexión a la base de datos"""
+        """Close database connection"""
         if self.client:
             self.client.close()
             logger.info("Disconnected from MongoDB")
     
     async def get_database(self) -> AsyncIOMotorDatabase:
         """
-        Obtener instancia de base de datos
+        Get database instance
         
         Returns:
-            AsyncIOMotorDatabase: Instancia de base de datos
+            AsyncIOMotorDatabase: Database instance
         """
         if self.db is None:
             await self.connect()
         return self.db
     
     async def create_indexes(self) -> None:
-        """Crear índices de base de datos"""
-        # Índices para usuarios
+        """Create database indexes"""
+        # Indexes for users
         await self.db.users.create_index("email", unique=True)
         await self.db.users.create_index("full_name")
         await self.db.users.create_index("roles")
         await self.db.users.create_index("is_active")
         
-        # Índices para viajes
+        # Indexes for travels
         await self.db.travels.create_index("user_id")
         await self.db.travels.create_index("status")
         await self.db.travels.create_index("created_at")
         
-        # Índices para mensajes
+        # Indexes for messages
         await self.db.messages.create_index("travel_id")
         await self.db.messages.create_index("user_id")
         await self.db.messages.create_index("created_at")
         
-        # Índices para notificaciones
+        # Indexes for notifications
         await self.db.notifications.create_index("user_id")
         await self.db.notifications.create_index("read")
         await self.db.notifications.create_index("created_at")
@@ -69,22 +69,22 @@ class Database:
 
 def format_document(document: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Formatear documento de MongoDB
+    Format MongoDB document
     
     Args:
-        document: Documento de MongoDB
+        document: MongoDB document
     
     Returns:
-        Dict[str, Any]: Documento formateado
+        Dict[str, Any]: Formatted document
     """
     if not document:
         return {}
     
-    # Convertir ObjectId a string
+    # Convert ObjectId to string
     if "_id" in document:
         document["_id"] = str(document["_id"])
     
-    # Convertir fechas a ISO
+    # Convert dates to ISO
     for key, value in document.items():
         if isinstance(value, datetime):
             document[key] = value.isoformat()
@@ -93,16 +93,16 @@ def format_document(document: Dict[str, Any]) -> Dict[str, Any]:
 
 def parse_object_id(id_str: str) -> ObjectId:
     """
-    Convertir string a ObjectId
+    Convert string to ObjectId
     
     Args:
-        id_str: ID en formato string
+        id_str: ID in string format
     
     Returns:
-        ObjectId: ID en formato ObjectId
+        ObjectId: ID in ObjectId format
     
     Raises:
-        ValueError: Si el ID no es válido
+        ValueError: If the ID is not valid
     """
     try:
         return ObjectId(id_str)
@@ -115,24 +115,24 @@ def build_query(
     search_term: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Construir query de MongoDB
+    Build MongoDB query
     
     Args:
-        filters: Filtros a aplicar
-        search_fields: Campos para búsqueda
-        search_term: Término de búsqueda
+        filters: Filters to apply
+        search_fields: Fields for search
+        search_term: Search term
     
     Returns:
-        Dict[str, Any]: Query de MongoDB
+        Dict[str, Any]: MongoDB query
     """
     query = {}
     
-    # Aplicar filtros
+    # Apply filters
     for key, value in filters.items():
         if value is not None:
             query[key] = value
     
-    # Aplicar búsqueda
+    # Apply search
     if search_term and search_fields:
         search_query = []
         for field in search_fields:
@@ -142,31 +142,31 @@ def build_query(
     
     return query
 
-# Instancia global de base de datos
+# Global database instance
 db = Database()
 
-# Funciones para obtener colecciones
+# Functions to get collections
 async def get_users_collection():
-    """Obtener colección de usuarios"""
+    """Get users collection"""
     database = await db.get_database()
     return database.users
 
 async def get_travels_collection():
-    """Obtener colección de viajes"""
+    """Get travels collection"""
     database = await db.get_database()
     return database.travels
 
 async def get_messages_collection():
-    """Obtener colección de mensajes"""
+    """Get messages collection"""
     database = await db.get_database()
     return database.messages
 
 async def get_notifications_collection():
-    """Obtener colección de notificaciones"""
+    """Get notifications collection"""
     database = await db.get_database()
     return database.notifications
 
-# Alias para compatibilidad
+# Aliases for compatibility
 users_collection = get_users_collection
 travels_collection = get_travels_collection
 messages_collection = get_messages_collection

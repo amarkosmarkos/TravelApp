@@ -85,13 +85,13 @@ class TravelWorkflowGraph:
         try:
             state["step"] = "extract_country"
             
-            # Usar el agente principal para extraer el país
+            # Use the main agent to extract the country
             response = await self.travel_agent.process_request(
                 state["user_input"], 
                 "workflow"
             )
             
-            # Extraer país del mensaje (simplificado)
+            # Extract country from message (simplified)
             country = self._extract_country_from_message(state["user_input"])
             state["country"] = country
             
@@ -139,7 +139,7 @@ class TravelWorkflowGraph:
                 state["error"] = "No se encontraron ciudades para calcular la ruta"
                 return state
             
-            # Calcular ruta óptima
+            # Calculate optimal route
             route = self.routing_agent.calculate_route(state["cities"])
             state["route"] = route
             
@@ -224,7 +224,7 @@ class TravelWorkflowGraph:
         """
         Extrae el país del mensaje del usuario (simplificado).
         """
-        # Mapeo de países comunes
+        # Common country mapping
         country_mapping = {
             "thailand": "Thailand",
             "japan": "Japan",
@@ -254,7 +254,7 @@ class TravelWorkflowGraph:
             if country_key in message_lower:
                 return country_name
         
-        # Si no se encuentra, devolver el primer país mencionado
+        # If not found, return the first mentioned country
         return "Thailand"  # Fallback
     
     def _create_final_response(self, state: AgentState) -> str:

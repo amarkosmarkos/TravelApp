@@ -1,5 +1,5 @@
 """
-Agente principal de viajes que orquesta todo el proceso de creación de itinerarios.
+Main travel agent orchestrating the itinerary creation process.
 """
 
 from typing import Dict, Any, List
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class TravelAgent:
     """
-    Agente principal que coordina la creación de itinerarios de viaje.
+    Main agent that coordinates travel itinerary creation.
     """
     
     def __init__(self, langfuse_client: Langfuse = None):
@@ -54,7 +54,7 @@ class TravelAgent:
         )
     
     def _get_llm(self):
-        """Obtiene el LLM configurado."""
+        """Get configured LLM instance."""
         from app.config import settings
         from langchain_openai import AzureChatOpenAI
         
@@ -67,20 +67,20 @@ class TravelAgent:
         )
     
     def _get_system_prompt(self) -> str:
-        """Prompt del sistema para el agente principal."""
-        return """Eres un asistente de viajes experto. Tu tarea es ayudar a los usuarios a crear itinerarios de viaje.
+        """System prompt for the main agent (English)."""
+        return """You are an expert travel assistant. Your task is to help users create travel itineraries.
 
-PROCESO DE TRABAJO:
-1. Cuando un usuario menciona un país o destino, usa search_cities_in_database para encontrar ciudades disponibles
-2. Analiza las ciudades encontradas y determina cuáles son más relevantes
-3. Usa calculate_optimal_route para encontrar la ruta más eficiente entre las ciudades
-4. Finalmente, usa create_itinerary para generar el itinerario final
+WORKFLOW:
+1) When the user mentions a country or destination, use search_cities_in_database to find available cities
+2) Analyze the cities and determine which ones are most relevant
+3) Use calculate_optimal_route to compute an efficient route
+4) Finally, use create_itinerary to generate the final itinerary
 
-INSTRUCCIONES:
-- Siempre busca en la base de datos primero
-- Considera la distancia y tiempo de viaje entre ciudades
-- Crea itinerarios realistas y atractivos
-- Responde de manera conversacional y útil
+INSTRUCTIONS:
+- Always consult the database first when possible
+- Consider distance and travel time between cities
+- Create realistic and attractive itineraries
+- ALWAYS respond in the user's preferred language (default: English)
 """
     
     def _create_tools(self) -> List[BaseTool]:
@@ -89,43 +89,43 @@ INSTRUCCIONES:
         
         @tool
         def search_cities_in_database(country_name: str) -> str:
-            """Busca ciudades disponibles en la base de datos para un país específico."""
+            """Search available cities in the database for a given country."""
             try:
                 cities = self.db_agent.search_cities_by_country(country_name)
-                return f"Ciudades encontradas para {country_name}: {cities}"
+                return f"Cities found for {country_name}: {cities}"
             except Exception as e:
-                logger.error(f"Error buscando ciudades: {e}")
-                return f"Error al buscar ciudades para {country_name}: {str(e)}"
+                logger.error(f"Error searching cities: {e}")
+                return f"Error searching cities for {country_name}: {str(e)}"
         
         @tool
         def calculate_optimal_route(cities: List[str]) -> str:
-            """Calcula la ruta óptima entre las ciudades seleccionadas."""
+            """Calculate the optimal route among selected cities."""
             try:
                 route = self.routing_agent.calculate_route(cities)
-                return f"Ruta óptima calculada: {route}"
+                return f"Optimal route calculated: {route}"
             except Exception as e:
-                logger.error(f"Error calculando ruta: {e}")
-                return f"Error al calcular ruta: {str(e)}"
+                logger.error(f"Error calculating route: {e}")
+                return f"Error calculating route: {str(e)}"
         
         @tool
         def create_itinerary(country: str, cities: List[str], route: str) -> str:
-            """Crea un itinerario detallado basado en el país, ciudades y ruta."""
+            """Create a detailed itinerary based on country, cities and route."""
             try:
                 itinerary = self.itinerary_agent.create_itinerary(country, cities, route)
-                return f"Itinerario creado: {itinerary}"
+                return f"Itinerary created: {itinerary}"
             except Exception as e:
-                logger.error(f"Error creando itinerario: {e}")
-                return f"Error al crear itinerario: {str(e)}"
+                logger.error(f"Error creating itinerary: {e}")
+                return f"Error creating itinerary: {str(e)}"
         
         return [search_cities_in_database, calculate_optimal_route, create_itinerary]
     
     async def process_request(self, user_message: str, user_id: str) -> Dict[str, Any]:
         """
-        Procesa una solicitud del usuario y genera una respuesta.
+        Process a user request and generate a response.
         """
         try:
             # Ejecutar agente sin observabilidad por ahora
-            # TODO: Implementar observabilidad con Langfuse cuando esté disponible
+            # TODO: Implement observability with Langfuse when available
             response = await self.agent_executor.ainvoke(
                 {"input": user_message}
             )
@@ -133,13 +133,13 @@ INSTRUCCIONES:
             return {
                 "message": response["output"],
                 "is_user": False,
-                "intention": "itinerary_created" if "itinerario" in response["output"].lower() else "conversation"
+                "intention": "itinerary_created" if "itinerary" in response["output"].lower() else "conversation"
             }
             
         except Exception as e:
-            logger.error(f"Error procesando solicitud: {e}")
+            logger.error(f"Error processing request: {e}")
             return {
-                "message": f"Lo siento, hubo un error procesando tu solicitud: {str(e)}",
+                "message": f"Sorry, there was an error processing your request: {str(e)}",
                 "is_user": False,
                 "intention": "error"
             } 

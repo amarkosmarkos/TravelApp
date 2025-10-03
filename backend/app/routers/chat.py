@@ -21,24 +21,24 @@ class ChatResponse(BaseModel):
     history: List[ChatMessage] = Field(..., description="Updated chat history")
 
 class TravelSetupRequest(BaseModel):
-    """Configuración inicial del viaje."""
-    start_date: datetime = Field(..., description="Fecha de inicio del viaje")
-    total_days: int = Field(..., description="Número total de días")
-    country: str = Field(..., description="País de destino")
-    origin_city: Optional[str] = Field(default="", description="Ciudad de origen")
-    companions: Optional[str] = Field(default="solo", description="Tipo de viaje (solo, pareja, familia, amigos)")
-    preferences: Optional[dict] = Field(default={}, description="Preferencias adicionales")
+    """Initial travel configuration."""
+    start_date: datetime = Field(..., description="Travel start date")
+    total_days: int = Field(..., description="Total number of days")
+    country: str = Field(..., description="Destination country")
+    origin_city: Optional[str] = Field(default="", description="Origin city")
+    companions: Optional[str] = Field(default="solo", description="Travel type (solo, couple, family, friends)")
+    preferences: Optional[dict] = Field(default={}, description="Additional preferences")
 
 class TravelSetupResponse(BaseModel):
-    """Respuesta del setup de viaje."""
-    success: bool = Field(..., description="Si el setup fue exitoso")
-    message: str = Field(..., description="Mensaje de confirmación")
-    travel_id: Optional[str] = Field(default=None, description="ID del viaje creado")
+    """Travel setup response."""
+    success: bool = Field(..., description="Whether the setup was successful")
+    message: str = Field(..., description="Confirmation message")
+    travel_id: Optional[str] = Field(default=None, description="Created travel ID")
 
-# Diccionario para almacenar el historial de chat por usuario
+# Dictionary to store chat history per user
 chat_histories = {}
 
-# Diccionario para almacenar configuración de viajes por usuario
+# Dictionary to store travel configuration per user
 travel_setups = {}
 
 async def get_current_user(token: str = Depends(verify_jwt_token)):
@@ -50,16 +50,16 @@ async def get_current_user(token: str = Depends(verify_jwt_token)):
 @router.post("/travel/setup", response_model=TravelSetupResponse)
 async def setup_travel(request: TravelSetupRequest, token: str = Depends(verify_jwt_token)):
     """
-    Configuración inicial del viaje antes de comenzar el chat.
+    Initial travel configuration before starting the chat.
     """
     try:
         user_email = verify_jwt_token(token)
         
-        # Generar ID único para el viaje
+        # Generate unique ID for the travel
         import uuid
         travel_id = str(uuid.uuid4())
         
-        # Guardar configuración del viaje
+        # Save travel configuration
         travel_setups[user_email] = {
             "travel_id": travel_id,
             "start_date": request.start_date,
@@ -73,33 +73,33 @@ async def setup_travel(request: TravelSetupRequest, token: str = Depends(verify_
         
         return TravelSetupResponse(
             success=True,
-            message=f"Configuración de viaje guardada: {request.total_days} días a {request.country} desde {request.start_date.strftime('%d/%m/%Y')}",
+            message=f"Travel configuration saved: {request.total_days} days to {request.country} from {request.start_date.strftime('%d/%m/%Y')}",
             travel_id=travel_id
         )
         
     except Exception as e:
-        print(f"Error en setup de viaje: {str(e)}")
+        print(f"Error in travel setup: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error configurando el viaje: {str(e)}"
+            detail=f"Error configuring travel: {str(e)}"
         )
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, token: str = Depends(verify_jwt_token)):
     try:
-        # Obtener el cuerpo de la solicitud como JSON
+        # Get request body as JSON
         body = await request.json()
-        print("Cuerpo de la solicitud recibido:", json.dumps(body, indent=2))
+        print("Request body received:", json.dumps(body, indent=2))
 
-        # Validar y convertir el cuerpo a ChatRequest
+        # Validate and convert body to ChatRequest
         chat_request = ChatRequest(**body)
-        print(f"Mensaje validado: {chat_request.message}")
-        print(f"Historial validado: {chat_request.history}")
+        print(f"Validated message: {chat_request.message}")
+        print(f"Validated history: {chat_request.history}")
         
-        # Obtener usuario (email) y travel_id si vino en el payload
+        # Get user (email) and travel_id if it came in the payload
         user_email = verify_jwt_token(token)
         travel_id = (travel_setups.get(user_email, {}) or {}).get("travel_id")
-        # Si hay travel_id almacenado pero el documento fue borrado en Mongo, regenerar uno efímero
+        # If there's a stored travel_id but the document was deleted in Mongo, regenerate an ephemeral one
         try:
             from bson import ObjectId
             from app.database import get_travels_collection
@@ -111,18 +111,18 @@ async def chat(request: Request, token: str = Depends(verify_jwt_token)):
         except Exception:
             pass
         if not travel_id:
-            # Si no hay setup válido, generamos un travel_id efímero por compatibilidad
+            # If there's no valid setup, generate an ephemeral travel_id for compatibility
             import uuid
             travel_id = str(uuid.uuid4())
 
-        # Pasar por ChatService (con gating) para respuesta consistente
+        # Pass through ChatService (with gating) for consistent response
         svc_response = await chat_service.process_message(
             message=chat_request.message,
             user_id=user_email,
             travel_id=travel_id
         )
 
-        # Reconstruir historial de respuesta: anexar user y assistant
+        # Reconstruct response history: append user and assistant
         updated_history = chat_request.history or []
         updated_history = updated_history + [
             ChatMessage(role="user", content=chat_request.message),
@@ -135,10 +135,10 @@ async def chat(request: Request, token: str = Depends(verify_jwt_token)):
         )
         
     except Exception as e:
-        print(f"Error en el endpoint de chat: {str(e)}")
+        print(f"Error in chat endpoint: {str(e)}")
         if isinstance(e, ValueError):
-            print(f"Detalles del error de validación: {str(e)}")
+            print(f"Validation error details: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error al procesar el mensaje: {str(e)}"
+            detail=f"Error processing message: {str(e)}"
         ) 

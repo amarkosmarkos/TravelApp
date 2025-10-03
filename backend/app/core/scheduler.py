@@ -1,5 +1,5 @@
 """
-Scheduler central para gestión de presupuesto de tiempo y planificación de viajes.
+Central scheduler for time budget management and travel planning.
 """
 
 from typing import List, Dict, Any, Optional
@@ -11,7 +11,7 @@ from geopy.distance import geodesic
 logger = logging.getLogger(__name__)
 
 class CityVisit(BaseModel):
-    """Modelo para una visita a una ciudad con tiempos específicos."""
+    """Model for a city visit with specific times."""
     name: str
     arrival_dt: datetime
     departure_dt: datetime
@@ -26,7 +26,7 @@ class CityVisit(BaseModel):
         }
 
 class TravelPlan(BaseModel):
-    """Modelo completo del plan de viaje con línea temporal."""
+    """Complete travel plan model with timeline."""
     travel_id: str
     user_id: str
     origin_city: str
@@ -44,56 +44,56 @@ class TravelPlan(BaseModel):
 
 class TimeBudgetScheduler:
     """
-    Gestor de presupuesto de tiempo para itinerarios de viaje.
+    Time budget manager for travel itineraries.
     """
     
     def __init__(self, total_days: int, start_dt: datetime, transport_provider: Optional[object] = None):
         self.total_hours = total_days * 24
         self.start_dt = start_dt
-        self.avg_speed_kmh = 70  # velocidad promedio carretera
-        self.transport_provider = transport_provider  # opcional: servicio externo
+        self.avg_speed_kmh = 70  # average road speed
+        self.transport_provider = transport_provider  # optional: external service
         
     def allocate_time(self, city_scores: List[Dict[str, Any]], 
                      transport_matrix: Dict[str, Dict[str, float]] = None) -> TravelPlan:
         """
-        Asigna tiempo a las ciudades basándose en scores y matriz de transporte.
+        Allocates time to cities based on scores and transport matrix.
         """
         try:
-            # 1. Calcular tiempo de transporte total
+            # 1. Calculate total transport time
             total_transport_hours = self._calculate_total_transport_hours(
                 city_scores, transport_matrix
             )
             
-            # 2. Usar TODOS los días disponibles para el viaje
+            # 2. Use ALL available days for the trip
             total_available_days = self.total_hours / 24.0
             transport_days = total_transport_hours / 24.0
             available_explore_days = total_available_days - transport_days
             
-            # 3. Distribuir días de exploración según scores
+            # 3. Distribute exploration days according to scores
             total_score = sum(city.get("score", 1) for city in city_scores)
             visits = []
             current_dt = self.start_dt
             
             for i, city in enumerate(city_scores):
-                # Calcular días de estancia proporcionales al score
+                # Calculate stay days proportional to score
                 city_score = city.get("score", 1)
                 explore_days = (city_score / total_score) * available_explore_days
                 
-                # Mínimo 1 día de estancia, redondear hacia arriba
+                # Minimum 1 day stay, round up
                 min_stay_days = 1
-                stay_days = max(min_stay_days, int(explore_days + 0.5))  # Redondear
+                stay_days = max(min_stay_days, int(explore_days + 0.5))  # Round
                 
-                # Convertir a horas para cálculos de fechas
+                # Convert to hours for date calculations
                 stay_hours = stay_days * 24
                 
-                # Calcular transporte desde la ciudad anterior
+                # Calculate transportation from previous city
                 transport_hours = 0
                 if i > 0 and transport_matrix:
                     prev_city = city_scores[i-1]["name"]
                     curr_city = city["name"]
                     transport_hours = transport_matrix.get(prev_city, {}).get(curr_city, 4)
                 
-                # Crear visita
+                # Create visit
                 arrival_dt = current_dt
                 departure_dt = arrival_dt + timedelta(hours=stay_hours)
                 
@@ -109,20 +109,20 @@ class TimeBudgetScheduler:
                         "description": city.get("description", ""),
                         "latitude": city.get("latitude") or city.get("lat"),
                         "longitude": city.get("longitude") or city.get("lon"),
-                        "days": stay_days  # Añadir días para compatibilidad
+                        "days": stay_days  # Add days for compatibility
                     }
                 )
                 
                 visits.append(visit)
                 current_dt = departure_dt + timedelta(hours=transport_hours)
             
-            # Calcular fechas finales
+            # Calculate final dates
             end_dt = current_dt
             
-            # Crear plan de viaje
+            # Create travel plan
             plan = TravelPlan(
-                travel_id="",  # Se asignará después
-                user_id="",    # Se asignará después
+                travel_id="",  # Will be assigned later
+                user_id="",    # Will be assigned later
                 origin_city="",
                 start_dt=self.start_dt,
                 end_dt=end_dt,
@@ -132,21 +132,21 @@ class TimeBudgetScheduler:
                 preferences={}
             )
             
-            logger.info(f"Plan creado: {len(visits)} ciudades, "
-                       f"{plan.total_explore_hours/24:.1f} días exploración, "
-                       f"{plan.total_travel_hours/24:.1f} días transporte, "
-                       f"Total: {(plan.total_explore_hours + plan.total_travel_hours)/24:.1f} días")
+            logger.info(f"Plan created: {len(visits)} cities, "
+                       f"{plan.total_explore_hours/24:.1f} exploration days, "
+                       f"{plan.total_travel_hours/24:.1f} transport days, "
+                       f"Total: {(plan.total_explore_hours + plan.total_travel_hours)/24:.1f} days")
             
             return plan
             
         except Exception as e:
-            logger.error(f"Error en allocate_time: {e}")
+            logger.error(f"Error in allocate_time: {e}")
             raise
     
     def _calculate_total_transport_hours(self, city_scores: List[Dict[str, Any]], 
                                        transport_matrix: Dict[str, Dict[str, float]] = None) -> float:
         """
-        Calcula el tiempo total de transporte entre ciudades.
+        Calculates total transport time between cities.
         """
         if not transport_matrix or len(city_scores) <= 1:
             return 0
@@ -156,11 +156,11 @@ class TimeBudgetScheduler:
             prev_city = city_scores[i]["name"]
             curr_city = city_scores[i + 1]["name"]
             
-            # Usar matriz de transporte si está disponible
+            # Use transport matrix if available
             if prev_city in transport_matrix and curr_city in transport_matrix[prev_city]:
                 hours = transport_matrix[prev_city][curr_city]
             else:
-                # Calcular usando coordenadas
+                # Calculate using coordinates
                 hours = self._calculate_transport_hours(
                     city_scores[i], city_scores[i + 1]
                 )
@@ -171,10 +171,10 @@ class TimeBudgetScheduler:
     
     def _calculate_transport_hours(self, city1: Dict[str, Any], city2: Dict[str, Any]) -> float:
         """
-        Calcula horas de transporte entre dos ciudades usando coordenadas.
+        Calculates transport hours between two cities using coordinates.
         """
         try:
-            # Si hay proveedor externo, intentar primero
+            # If there's an external provider, try first
             if self.transport_provider and hasattr(self.transport_provider, "get_hours_between"):
                 try:
                     hours = self.transport_provider.get_hours_between(city1, city2)
@@ -194,12 +194,12 @@ class TimeBudgetScheduler:
                 return 4.0  # fallback
                 
         except Exception as e:
-            logger.warning(f"Error calculando transporte {city1.get('name')} → {city2.get('name')}: {e}")
+            logger.warning(f"Error calculating transport {city1.get('name')} → {city2.get('name')}: {e}")
             return 4.0
     
     def create_transport_matrix(self, cities: List[Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
         """
-        Crea matriz de tiempo de transporte entre todas las ciudades.
+        Creates transport time matrix between all cities.
         """
         matrix = {}
         
@@ -214,10 +214,10 @@ class TimeBudgetScheduler:
     
     def apply_modification(self, plan: TravelPlan, modification: Dict[str, Any]) -> TravelPlan:
         """
-        Aplica una modificación al plan existente.
+        Applies a modification to the existing plan.
         """
         try:
-            # Crear nueva lista de ciudades con scores
+            # Create new city list with scores
             city_scores = []
             for visit in plan.visits:
                 city_scores.append({
@@ -229,7 +229,7 @@ class TimeBudgetScheduler:
                     "longitude": visit.metadata.get("longitude")
                 })
             
-            # Aplicar modificaciones según el tipo
+            # Apply modifications according to type
             if modification.get("action") == "add_city":
                 new_city = modification.get("city", {})
                 city_scores.append(new_city)
@@ -243,14 +243,14 @@ class TimeBudgetScheduler:
                 new_hours = modification.get("hours", 24)
                 for city in city_scores:
                     if city["name"] == city_name:
-                        city["score"] = new_hours / 24  # convertir a score
+                        city["score"] = new_hours / 24  # convert to score
                         break
             
-            # Recrear plan con las modificaciones
+            # Recreate plan with modifications
             transport_matrix = self.create_transport_matrix(city_scores)
             new_plan = self.allocate_time(city_scores, transport_matrix)
             
-            # Mantener IDs originales
+            # Keep original IDs
             new_plan.travel_id = plan.travel_id
             new_plan.user_id = plan.user_id
             new_plan.origin_city = plan.origin_city
@@ -259,5 +259,5 @@ class TimeBudgetScheduler:
             return new_plan
             
         except Exception as e:
-            logger.error(f"Error aplicando modificación: {e}")
+            logger.error(f"Error applying modification: {e}")
             return plan 

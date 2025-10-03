@@ -11,10 +11,10 @@ from app.core.security import verify_password, get_password_hash, create_access_
 from app.utils.logging import logger
 import logging
 
-# Configuración de logging
+# Logging configuration
 logger = logging.getLogger(__name__)
 
-# Configuración de OAuth2
+# OAuth2 configuration
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 class TokenData(BaseModel):
@@ -27,7 +27,7 @@ class Token(BaseModel):
     expires_in: int
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
-    """Obtiene el usuario actual basado en el token JWT."""
+    """Get current user based on JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -48,13 +48,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInDB:
     return user
 
 async def get_current_active_user(current_user: UserInDB = Depends(get_current_user)) -> UserInDB:
-    """Verifica que el usuario actual esté activo."""
+    """Verify that the current user is active."""
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
 def check_permissions(required_permissions: list[str]):
-    """Decorador para verificar permisos del usuario."""
+    """Decorator to verify user permissions."""
     async def permission_checker(current_user: UserInDB = Depends(get_current_active_user)):
         user_permissions = set(current_user.permissions)
         if not all(perm in user_permissions for perm in required_permissions):

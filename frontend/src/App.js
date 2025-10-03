@@ -14,13 +14,26 @@ import theme from './theme';
 import './styles/App.css';
 
 const App = () => {
+  const isMock = (() => {
+    try {
+      const envFlag = (typeof process !== 'undefined' && process && process.env && process.env.REACT_APP_MOCK);
+      const winFlag = (typeof window !== 'undefined' && window.REACT_APP_MOCK);
+      return String(envFlag || winFlag || 'true').toLowerCase() === 'true';
+    } catch (e) { return true; }
+  })();
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route index element={<HomePage />} />
+            <Route index element={isMock ? (
+              <ProtectedRoute>
+                <MainCanvas />
+              </ProtectedRoute>
+            ) : (
+              <HomePage />
+            )} />
             <Route path="login" element={
               <PublicRoute>
                 <LoginPage />

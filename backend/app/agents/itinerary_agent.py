@@ -1,5 +1,5 @@
 """
-Agente especializado en generar itinerarios detallados usando IA.
+Agent specialized in generating detailed itineraries using AI.
 """
 
 from typing import List, Dict, Any
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ItineraryAgent:
     """
-    Agente especializado en generar itinerarios detallados.
+    Agent specialized in generating detailed itineraries.
     """
     
     def __init__(self):
@@ -27,10 +27,10 @@ class ItineraryAgent:
     
     def create_itinerary(self, country: str, cities: List[Dict[str, Any]], route: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Crea un itinerario detallado basado en el país, ciudades y ruta.
+        Creates a detailed itinerary based on country, cities and route.
         """
         try:
-            # Preparar datos para la IA
+            # Prepare data for AI
             itinerary_data = {
                 "country": country,
                 "cities": cities,
@@ -40,10 +40,10 @@ class ItineraryAgent:
                 "algorithm": route.get("algorithm", "unknown")
             }
             
-            # Generar itinerario usando IA
+            # Generate itinerary using AI
             itinerary = self._generate_itinerary_with_ai(itinerary_data)
             
-            # Crear estructura de respuesta
+            # Create response structure
             response = {
                 "itinerary": itinerary,
                 "summary": {
@@ -60,10 +60,10 @@ class ItineraryAgent:
             return response
             
         except Exception as e:
-            self.logger.error(f"Error creando itinerario: {e}")
+            self.logger.error(f"Error creating itinerary: {e}")
             return {
                 "error": str(e),
-                "itinerary": "No se pudo generar el itinerario",
+                "itinerary": "Could not generate the itinerary",
                 "summary": {
                     "country": country,
                     "total_cities": len(cities),
@@ -73,35 +73,35 @@ class ItineraryAgent:
     
     def _generate_itinerary_with_ai(self, itinerary_data: Dict[str, Any]) -> str:
         """
-        Genera el itinerario usando IA.
+        Generates the itinerary using AI.
         """
         try:
-            # Preparar prompt para la IA
+            # Prepare prompt for AI
             prompt = self._create_itinerary_prompt(itinerary_data)
             
-            # Llamar a la IA
+            # Call AI
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
                     {
                         "role": "system",
-                        "content": """Eres un experto en viajes y turismo. Tu tarea es crear itinerarios detallados y atractivos.
+                        "content": """You are a travel and tourism expert. Your task is to create detailed and attractive itineraries.
 
-INSTRUCCIONES:
-1. Crea itinerarios realistas y prácticos
-2. Incluye actividades específicas para cada ciudad
-3. Considera el tiempo de viaje entre ciudades
-4. Sugiere lugares de interés, restaurantes y actividades
-5. Mantén un tono conversacional y atractivo
-6. Incluye consejos prácticos de viaje
-7. Considera la cultura y características del país
+INSTRUCTIONS:
+1. Create realistic and practical itineraries
+2. Include specific activities for each city
+3. Consider travel time between cities
+4. Suggest places of interest, restaurants and activities
+5. Maintain a conversational and attractive tone
+6. Include practical travel tips
+7. Consider the culture and characteristics of the country
 
-FORMATO DE RESPUESTA:
-- Usa un formato claro y estructurado
-- Incluye días numerados
-- Menciona actividades específicas
-- Incluye consejos de transporte
-- Sugiere lugares de interés
+RESPONSE FORMAT:
+- Use a clear and structured format
+- Include numbered days
+- Mention specific activities
+- Include transportation tips
+- Suggest places of interest
 """
                     },
                     {
@@ -116,21 +116,21 @@ FORMATO DE RESPUESTA:
             return response.choices[0].message.content
             
         except Exception as e:
-            self.logger.error(f"Error generando itinerario con IA: {e}")
-            return f"No se pudo generar el itinerario: {str(e)}"
+            self.logger.error(f"Error generating itinerary with AI: {e}")
+            return f"Could not generate the itinerary: {str(e)}"
     
     def _create_itinerary_prompt(self, itinerary_data: Dict[str, Any]) -> str:
         """
-        Crea el prompt para generar el itinerario.
+        Creates the prompt to generate the itinerary.
         """
         country = itinerary_data["country"]
         cities = itinerary_data["cities"]
         route = itinerary_data["route"]
         total_distance = itinerary_data["total_distance"]
         estimated_time = itinerary_data["estimated_time"]
-        # Calcular días reales sumando stay_days
+        # Calculate real days by summing stay_days
         estimated_days = sum(city.get("days") or city.get("stay_days", 1) for city in cities)
-        # Formatear información de ciudades
+        # Format city information
         cities_info = []
         for i, city in enumerate(cities, 1):
             city_info = f"{i}. {city['name']}"
@@ -139,50 +139,50 @@ FORMATO DE RESPUESTA:
                 arr = _dt.fromisoformat(city["arrival_dt"]).strftime("%d/%m %H:%M")
                 dep = _dt.fromisoformat(city["departure_dt"]).strftime("%d/%m %H:%M")
                 stay = ( _dt.fromisoformat(city["departure_dt"]) - _dt.fromisoformat(city["arrival_dt"]) ).days
-                city_info += f" (Llegada: {arr}, Salida: {dep}, Estancia: {stay} días)"
+                city_info += f" (Arrival: {arr}, Departure: {dep}, Stay: {stay} days)"
             elif city.get("days") or city.get("stay_days"):
-                city_info += f" - Estancia: {city.get('days') or city.get('stay_days')} días"
+                city_info += f" - Stay: {city.get('days') or city.get('stay_days')} days"
             if city.get("population"):
-                city_info += f" (Población: {city['population']:,})"
+                city_info += f" (Population: {city['population']:,})"
             if city.get("latitude") and city.get("longitude"):
-                city_info += f" - Coord.: {city['latitude']:.4f}, {city['longitude']:.4f}"
+                city_info += f" - Coords.: {city['latitude']:.4f}, {city['longitude']:.4f}"
             cities_info.append(city_info)
         
         cities_text = "\n".join(cities_info)
         
         prompt = f"""
-Crea un itinerario detallado para un viaje a {country}.
+Create a detailed itinerary for a trip to {country}.
 
-INFORMACIÓN DEL VIAJE:
-- País: {country}
-- Ciudades a visitar: {len(cities)}
-- Distancia total: {total_distance:.1f} km
-- Tiempo estimado de viaje: {estimated_time:.1f} horas
-- Días estimados: {estimated_days} días
+TRIP INFORMATION:
+- Country: {country}
+- Cities to visit: {len(cities)}
+- Total distance: {total_distance:.1f} km
+- Estimated travel time: {estimated_time:.1f} hours
+- Estimated days: {estimated_days} days
 
-CIUDADES:
+CITIES:
 {cities_text}
 
-RUTA OPTIMIZADA:
-- Algoritmo usado: {route.get('algorithm', 'unknown')}
-- Ruta sugerida: {' → '.join([city['name'] for city in route.get('cities', cities)])}
+OPTIMIZED ROUTE:
+- Algorithm used: {route.get('algorithm', 'unknown')}
+- Suggested route: {' → '.join([city['name'] for city in route.get('cities', cities)])}
 
-REQUERIMIENTOS:
-1. Crea un itinerario día por día
-2. Incluye actividades específicas para cada ciudad
-3. Sugiere lugares de interés, restaurantes y actividades
-4. Considera el tiempo de transporte entre ciudades
-5. Incluye consejos prácticos de viaje
-6. Mantén un tono atractivo y conversacional
-7. Considera la cultura y características de {country}
+REQUIREMENTS:
+1. Create a day-by-day itinerary
+2. Include specific activities for each city
+3. Suggest places of interest, restaurants and activities
+4. Consider transportation time between cities
+5. Include practical travel tips
+6. Maintain an attractive and conversational tone
+7. Consider the culture and characteristics of {country}
 
-FORMATO:
-- Usa un formato claro con días numerados
-- Incluye horarios aproximados
-- Menciona actividades específicas
-- Incluye consejos de transporte
-- Sugiere lugares de interés
-- Añade consejos culturales y prácticos
+FORMAT:
+- Use a clear format with numbered days
+- Include approximate schedules
+- Mention specific activities
+- Include transportation tips
+- Suggest places of interest
+- Add cultural and practical tips
 """
         
         return prompt
@@ -190,10 +190,10 @@ FORMATO:
     def create_detailed_itinerary(self, country: str, cities: List[Dict[str, Any]], 
                                  route: Dict[str, Any], preferences: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Crea un itinerario más detallado considerando preferencias del usuario.
+        Creates a more detailed itinerary considering user preferences.
         """
         try:
-            # Agregar preferencias al itinerario
+            # Add preferences to itinerary
             itinerary_data = {
                 "country": country,
                 "cities": cities,
@@ -203,10 +203,10 @@ FORMATO:
                 "estimated_time": route.get("estimated_time", 0)
             }
             
-            # Generar itinerario detallado
+            # Generate detailed itinerary
             detailed_itinerary = self._generate_detailed_itinerary(itinerary_data)
             
-            # Crear estructura de respuesta
+            # Create response structure
             response = {
                 "itinerary": detailed_itinerary,
                 "summary": {
@@ -224,51 +224,51 @@ FORMATO:
             return response
             
         except Exception as e:
-            self.logger.error(f"Error creando itinerario detallado: {e}")
+            self.logger.error(f"Error creating detailed itinerary: {e}")
             return {
                 "error": str(e),
-                "itinerary": "No se pudo generar el itinerario detallado"
+                "itinerary": "Could not generate the detailed itinerary"
             }
     
     def _generate_detailed_itinerary(self, itinerary_data: Dict[str, Any]) -> str:
         """
-        Genera un itinerario más detallado considerando preferencias.
+        Generates a more detailed itinerary considering preferences.
         """
         try:
-            # Preparar prompt detallado
+            # Prepare detailed prompt
             prompt = self._create_detailed_prompt(itinerary_data)
             
-            # Llamar a la IA
+            # Call AI
             response = self.client.chat.completions.create(
                 model=self.deployment_name,
                 messages=[
                     {
                         "role": "system",
-                        "content": """Eres un experto en viajes y turismo. Crea itinerarios muy detallados y personalizados.
+                        "content": """You are a travel and tourism expert. Create very detailed and personalized itineraries.
 
-INSTRUCCIONES:
-1. Crea itinerarios día por día con horarios específicos
-2. Incluye actividades detalladas para cada ciudad
-3. Sugiere lugares específicos con nombres y direcciones
-4. Incluye recomendaciones de restaurantes y hoteles
-5. Considera las preferencias del usuario
-6. Incluye consejos de transporte detallados
-7. Añade información cultural y histórica
-8. Sugiere actividades alternativas en caso de mal tiempo
-9. Incluye presupuesto estimado para actividades
-10. Considera la temporada y clima del país
+INSTRUCTIONS:
+1. Create day-by-day itineraries with specific schedules
+2. Include detailed activities for each city
+3. Suggest specific places with names and addresses
+4. Include restaurant and hotel recommendations
+5. Consider user preferences
+6. Include detailed transportation tips
+7. Add cultural and historical information
+8. Suggest alternative activities in case of bad weather
+9. Include estimated budget for activities
+10. Consider the season and climate of the country
 
-FORMATO:
-- Día 1: [Nombre de la ciudad]
-  - 09:00 - [Actividad específica]
-  - 12:00 - [Restaurante recomendado]
-  - 14:00 - [Lugar de interés]
-  - 18:00 - [Actividad de tarde]
-  - 20:00 - [Cena y actividades nocturnas]
+FORMAT:
+- Day 1: [City name]
+  - 09:00 - [Specific activity]
+  - 12:00 - [Recommended restaurant]
+  - 14:00 - [Place of interest]
+  - 18:00 - [Afternoon activity]
+  - 20:00 - [Dinner and night activities]
   
-- Consejos del día: [Consejos específicos]
-- Transporte: [Detalles de transporte]
-- Presupuesto estimado: [Cantidad]
+- Day tips: [Specific tips]
+- Transportation: [Transportation details]
+- Estimated budget: [Amount]
 """
                     },
                     {
@@ -283,19 +283,19 @@ FORMATO:
             return response.choices[0].message.content
             
         except Exception as e:
-            self.logger.error(f"Error generando itinerario detallado: {e}")
-            return f"No se pudo generar el itinerario detallado: {str(e)}"
+            self.logger.error(f"Error generating detailed itinerary: {e}")
+            return f"Could not generate the detailed itinerary: {str(e)}"
     
     def _create_detailed_prompt(self, itinerary_data: Dict[str, Any]) -> str:
         """
-        Crea el prompt para el itinerario detallado.
+        Creates the prompt for the detailed itinerary.
         """
         country = itinerary_data["country"]
         cities = itinerary_data["cities"]
         route = itinerary_data["route"]
         preferences = itinerary_data.get("preferences", {})
         
-        # Formatear preferencias
+        # Format preferences
         preferences_text = ""
         if preferences:
             pref_list = []
@@ -303,61 +303,61 @@ FORMATO:
                 pref_list.append(f"- {key}: {value}")
             preferences_text = "\n".join(pref_list)
         
-        # Formatear ciudades con información detallada
+        # Format cities with detailed information
         cities_detailed = []
         for i, city in enumerate(cities, 1):
-            city_info = f"Día {i}: {city['name']}"
+            city_info = f"Day {i}: {city['name']}"
             if city.get("population"):
-                city_info += f" (Población: {city['population']:,})"
+                city_info += f" (Population: {city['population']:,})"
             if city.get("type"):
-                city_info += f" - Tipo: {city['type']}"
+                city_info += f" - Type: {city['type']}"
             cities_detailed.append(city_info)
         
         cities_text = "\n".join(cities_detailed)
         
         prompt = f"""
-Crea un itinerario MUY DETALLADO para un viaje a {country}.
+Create a VERY DETAILED itinerary for a trip to {country}.
 
-INFORMACIÓN DEL VIAJE:
-- País: {country}
-- Número de ciudades: {len(cities)}
-- Distancia total: {route.get('total_distance', 0):.1f} km
-- Tiempo estimado: {route.get('estimated_time', 0):.1f} horas
+TRIP INFORMATION:
+- Country: {country}
+- Number of cities: {len(cities)}
+- Total distance: {route.get('total_distance', 0):.1f} km
+- Estimated time: {route.get('estimated_time', 0):.1f} hours
 
-CIUDADES A VISITAR:
+CITIES TO VISIT:
 {cities_text}
 
-PREFERENCIAS DEL USUARIO:
-{preferences_text if preferences_text else "No se especificaron preferencias"}
+USER PREFERENCES:
+{preferences_text if preferences_text else "No preferences specified"}
 
-RUTA OPTIMIZADA:
-- Algoritmo: {route.get('algorithm', 'unknown')}
-- Ruta: {' → '.join([city['name'] for city in route.get('cities', cities)])}
+OPTIMIZED ROUTE:
+- Algorithm: {route.get('algorithm', 'unknown')}
+- Route: {' → '.join([city['name'] for city in route.get('cities', cities)])}
 
-REQUERIMIENTOS DETALLADOS:
-1. Crea un itinerario día por día con horarios específicos
-2. Incluye actividades detalladas para cada ciudad
-3. Sugiere lugares específicos con nombres y direcciones
-4. Incluye recomendaciones de restaurantes y hoteles
-5. Considera las preferencias del usuario
-6. Incluye consejos de transporte detallados
-7. Añade información cultural e histórica
-8. Sugiere actividades alternativas
-9. Incluye presupuesto estimado
-10. Considera clima y temporada
+DETAILED REQUIREMENTS:
+1. Create a day-by-day itinerary with specific schedules
+2. Include detailed activities for each city
+3. Suggest specific places with names and addresses
+4. Include restaurant and hotel recommendations
+5. Consider user preferences
+6. Include detailed transportation tips
+7. Add cultural and historical information
+8. Suggest alternative activities
+9. Include estimated budget
+10. Consider climate and season
 
-FORMATO ESPECÍFICO:
-- Día X: [Nombre ciudad]
-  - 09:00 - [Actividad específica con detalles]
-  - 12:00 - [Restaurante con nombre y tipo de comida]
-  - 14:00 - [Lugar de interés con información]
-  - 18:00 - [Actividad de tarde]
-  - 20:00 - [Cena y actividades nocturnas]
+SPECIFIC FORMAT:
+- Day X: [City name]
+  - 09:00 - [Specific activity with details]
+  - 12:00 - [Restaurant with name and food type]
+  - 14:00 - [Place of interest with information]
+  - 18:00 - [Afternoon activity]
+  - 20:00 - [Dinner and night activities]
   
-- Consejos del día: [Consejos específicos]
-- Transporte: [Detalles de transporte]
-- Presupuesto estimado: [Cantidad]
-- Información cultural: [Datos culturales]
+- Day tips: [Specific tips]
+- Transportation: [Transportation details]
+- Estimated budget: [Amount]
+- Cultural information: [Cultural data]
 """
         
         return prompt 

@@ -1,5 +1,6 @@
 """
-Servicio de chat que maneja la comunicación con el asistente de viajes.
+Chat service that orchestrates the conversation with the travel assistant.
+All user-facing messages can be localized via utils.i18n.
 """
 
 import logging
@@ -10,12 +11,13 @@ from app.models.travel import ChatMessageCreate, Message
 from bson import ObjectId
 from app.agents.smart_itinerary_workflow import SmartItineraryWorkflow
 from app.agents.message_router import MessageRouter, MessageType
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 class ChatService:
     """
-    Servicio para manejar mensajes de chat y procesamiento de itinerarios.
+    Service for chat message processing and itinerary workflows.
     """
     
     def __init__(self):
@@ -25,22 +27,46 @@ class ChatService:
         self._recent_messages: Dict[str, float] = {}
         self._recent_ttl_sec = 3.0
     
-    async def process_message(self, message: str, user_id: str, travel_id: str, db=None) -> Dict[str, Any]:
+    async def process_message(self, message: str, user_id: str, travel_id: str, db=None, preferred_language: str | None = None) -> Dict[str, Any]:
         """
-        Procesa un mensaje del usuario usando el SmartItineraryWorkflow.
+        Process a user message using SmartItineraryWorkflow.
         """
         try:
-            logger.info(f"Procesando mensaje: {message}")
+            # Demo short-circuit
+            if settings.MOCK_MODE:
+                demo_reply = (
+                    "[DEMO] ¡Hola! Esta es una respuesta simulada. "
+                    "Puedo enseñarte un itinerario de ejemplo por Tailandia (Bangkok, Chiang Mai, Phuket) "
+                    "y darte sugerencias de hoteles y transporte. Escribe tus preferencias."
+                )
+                return {
+                    "message": demo_reply,
+                    "is_user": False,
+                    "intention": "demo_reply",
+                    "classification": {
+                        "type": "demo",
+                        "confidence": 1.0,
+                        "reason": "MOCK_MODE enabled",
+                        "extracted_country": "thailand"
+                    },
+                    "travel_id": travel_id,
+                    "user_id": user_id
+                }
 
-            # Deduplicación: evitar doble procesamiento del mismo mensaje en ventana corta
+            logger.info(f"Processing message: {message}")
+            from app.utils.language import detect_preferred_language
+            from app.utils.i18n import t
+            lang = preferred_language or detect_preferred_language(message)
+
+            # Dedup: avoid processing same message within a short window
             import time
             msg_norm = (message or "").strip().lower()
             dedup_key = f"{user_id}:{travel_id}:{msg_norm}"
             now = time.time()
             last_ts = self._recent_messages.get(dedup_key)
             if last_ts and (now - last_ts) < self._recent_ttl_sec:
-                logger.info("Mensaje duplicado detectado, ignorando procesamiento")
-                # No guardar nuevamente; devolver respuesta neutra para que WS no envíe
+                logger.info("Duplicate message detected; ignoring")
+                # Return neutral message so WS won't broadcast
                 return {
                     "message": "",
                     "is_user": False,
@@ -48,7 +74,7 @@ class ChatService:
                     "classification": {
                         "type": "duplicate",
                         "confidence": 1.0,
-                        "reason": "Mensaje repetido en ventana corta",
+                        "reason": t(lang, "duplicate_ignored"),
                         "extracted_country": ""
                     },
                     "travel_id": travel_id,
@@ -57,21 +83,17 @@ class ChatService:
             # Registrar mensaje
             self._recent_messages[dedup_key] = now
             
-            # Guardar mensaje del usuario
+            # Save user message
             await self._save_user_message(message, user_id, travel_id)
 
-            # Verificación temprana: si el viaje no existe (fue borrado), informar y pedir nueva configuración
+            # Early check: if travel does not exist, request new setup
             try:
                 from app.database import get_travels_collection
                 from bson import ObjectId
                 travels = await get_travels_collection()
                 tr_exists = await travels.find_one({"_id": ObjectId(travel_id)})
                 if not tr_exists:
-                    assistant_message = (
-                        "No encuentro la configuración de este viaje (posiblemente fue borrado). "
-                        "Indícame el país y la duración (por ejemplo, 14 días) para crear uno nuevo, "
-                        "o vuelve a realizar la configuración inicial."
-                    )
+                    assistant_message = t(lang, "travel_not_found")
                     await self._save_assistant_message(assistant_message, user_id, travel_id)
                     return {
                         "message": assistant_message,
@@ -87,9 +109,9 @@ class ChatService:
                         "user_id": user_id
                     }
             except Exception as e:
-                logger.warning(f"No se pudo verificar existencia del viaje {travel_id}: {e}")
+                logger.warning(f"Could not verify travel existence {travel_id}: {e}")
 
-            # Construir contexto del travel para clasificación inteligente
+            # Build travel context for intent classification
             travel_ctx = {}
             try:
                 from app.database import get_travels_collection, get_itineraries_collection
@@ -106,9 +128,9 @@ class ChatService:
                         "has_itinerary": bool(it is not None)
                     }
             except Exception as e:
-                logger.warning(f"No se pudo construir travel context: {e}")
+                logger.warning(f"Could not build travel context: {e}")
 
-            # Clasificar intención (gating) con function calling
+            # Classify intent (gating) with function calling
             classification = await self.message_router.classify_message(message, context=travel_ctx)
             message_type = classification.get("type", MessageType.GENERAL_CHAT)
             confidence = classification.get("confidence", 0.0)
@@ -116,20 +138,20 @@ class ChatService:
             country = classification.get("extracted_country") or travel_ctx.get("country") or self._extract_country_from_message(message) or "thailand"
             extracted_days = classification.get("total_days")
 
-            # Umbral para acciones automáticas
+            # Threshold for auto-actions
             auto_threshold = 0.75
 
-            # Si es chat general o confianza baja, pedir aclaración y no crear nada
-            # EXCEPTO si hay TravelSetup guardado y el mensaje es preferencias: disparamos CREATE_ITINERARY
+            # If general chat or low confidence, clarify instead of creating
+            # EXCEPT when TravelSetup is present and message looks like preferences → trigger create itinerary
             if (message_type == MessageType.GENERAL_CHAT) or (confidence < auto_threshold and message_type not in (MessageType.CREATE_ITINERARY, MessageType.MODIFY_ITINERARY)):
                 try:
-                    # Comprobar configuración del travel
+                    # Check travel setup
                     from app.database import get_travels_collection
                     travels = await get_travels_collection()
                     tr = await travels.find_one({"_id": ObjectId(travel_id)})
                     if tr and (tr.get("destination") or tr.get("country")) and (tr.get("total_days")):
-                        # Tratar como preferencias y crear itinerario
-                        logger.info("Preferencias detectadas con TravelSetup presente. Disparando creación de itinerario.")
+                        # Treat as preferences and create itinerary
+                        logger.info("Preferences detected with TravelSetup. Triggering itinerary creation.")
                         country_eff = (tr.get("country") or tr.get("destination") or country)
                         total_days = int(extracted_days or tr.get("total_days") or 7)
                         response = await self.smart_workflow.process_smart_request(
@@ -138,9 +160,9 @@ class ChatService:
                             travel_id=travel_id,
                             country=country_eff
                         )
-                        assistant_message = response.get("message", "Itinerario creado.")
+                        assistant_message = response.get("message", "Itinerary created.")
                         await self._save_assistant_message(assistant_message, user_id, travel_id)
-                        logger.info(f"Itinerario disparado por preferencias. country={country_eff}, total_days={total_days}")
+                        logger.info(f"Itinerary triggered by preferences. country={country_eff}, total_days={total_days}")
                         return {
                             "message": assistant_message,
                             "is_user": False,
@@ -150,11 +172,8 @@ class ChatService:
                             "user_id": user_id
                         }
                 except Exception as e:
-                    logger.warning(f"Fallo al disparar por preferencias con TravelSetup: {e}")
-                assistant_message = (
-                    "¡Hola! ¿Quieres que te cree un itinerario o modificar uno existente? "
-                    "Dime país y duración (por ejemplo, 14 días) y el estilo (playa, historia, naturaleza, gastronomía)."
-                )
+                    logger.warning(f"Failed to trigger by preferences with TravelSetup: {e}")
+                assistant_message = t(lang, "clarify_prompt")
                 await self._save_assistant_message(assistant_message, user_id, travel_id)
                 return {
                     "message": assistant_message,
@@ -163,14 +182,14 @@ class ChatService:
                     "classification": {
                         "type": message_type.value if hasattr(message_type, 'value') else str(message_type),
                         "confidence": confidence,
-                        "reason": classification.get("reason", "Baja confianza o chat general"),
+                        "reason": classification.get("reason", "low_confidence_or_general_chat"),
                         "extracted_country": country
                     },
                     "travel_id": travel_id,
                     "user_id": user_id
                 }
             
-            # ⭐ USAR EL NUEVO FLUJO CON SELECCIÓN ANTES DEL GRAFO
+            # Use the smart workflow (destination selection before the graph)
             response = await self.smart_workflow.process_smart_request(
                 user_input=message,
                 user_id=user_id,
@@ -178,13 +197,13 @@ class ChatService:
                 country=country
             )
             
-            # Asegurar que la respuesta tenga la estructura correcta
-            assistant_message = response.get("message", "Lo siento, no pude procesar tu mensaje.")
+            # Ensure message is present
+            assistant_message = response.get("message", "Sorry, I couldn't process your message.")
             
-            # Guardar respuesta del asistente
+            # Save assistant response
             await self._save_assistant_message(assistant_message, user_id, travel_id)
             
-            # Normalizar clasificación para ser JSON-serializable
+            # Normalize classification to be JSON-serializable
             type_str = message_type.value if hasattr(message_type, 'value') else str(message_type)
             classification_out = {
                 "type": type_str,
@@ -204,8 +223,9 @@ class ChatService:
             }
             
         except Exception as e:
-            logger.error(f"Error procesando mensaje: {e}")
-            error_message = f"Lo siento, hubo un error procesando tu mensaje: {str(e)}"
+            logger.error(f"Error processing message: {e}")
+            from app.utils.i18n import t
+            error_message = t("en", "error_processing", error=str(e))
             await self._save_assistant_message(error_message, user_id, travel_id)
             return {
                 "message": error_message,
@@ -245,6 +265,28 @@ class ChatService:
     
     async def get_chat_messages(self, travel_id: str, user_id: str, db, skip: int = 0, limit: int = 50) -> List[Dict]:
         try:
+            # Demo short-circuit
+            if settings.MOCK_MODE:
+                now_iso = datetime.utcnow().isoformat()
+                return [
+                    {
+                        "id": "mock-1",
+                        "content": "Hola, soy tu asistente de viajes (demo). ¿A qué país te gustaría viajar?",
+                        "is_user": False,
+                        "timestamp": now_iso,
+                        "user_id": "assistant",
+                        "travel_id": travel_id
+                    },
+                    {
+                        "id": "mock-2",
+                        "content": "Muéstrame un itinerario por Tailandia de 7 días",
+                        "is_user": True,
+                        "timestamp": now_iso,
+                        "user_id": user_id or "user",
+                        "travel_id": travel_id
+                    }
+                ]
+
             logger.info(f"Getting chat messages for travel {travel_id}, user {user_id}")
             messages_collection = await get_messages_collection()
             messages = await messages_collection.find(
@@ -269,6 +311,8 @@ class ChatService:
     async def create_message(self, message_data: ChatMessageCreate) -> Dict[str, Any]:
         """Crea un nuevo mensaje en la base de datos."""
         try:
+            if settings.MOCK_MODE:
+                return {"id": "mock-created", "success": True}
             messages_collection = await get_messages_collection()
             result = await messages_collection.insert_one(message_data.dict())
             return {"id": str(result.inserted_id), "success": True}
@@ -278,15 +322,15 @@ class ChatService:
 
     def _extract_country_from_message(self, message: str) -> str:
         """
-        Extrae el país del mensaje del usuario.
+        Extracts the country from the user's message.
         """
         message_lower = message.lower()
         
-        # Mapeo de países
+        # Country mapping
         country_mapping = {
             "tailandia": "thailand",
             "thailand": "thailand",
-            "tailandés": "thailand",
+            "thai": "thailand",
             "tailandesa": "thailand",
             "bangkok": "thailand",
             "chiang mai": "thailand",

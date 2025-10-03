@@ -1,5 +1,5 @@
 """
-Configuración del asistente de viajes.
+Travel assistant configuration.
 """
 
 from .settings import settings

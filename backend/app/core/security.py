@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from app.config import settings
 
-# Configuración de seguridad
+# Security configuration
 pwd_context = CryptContext(
     schemes=["bcrypt"],
     deprecated="auto",
@@ -12,15 +12,15 @@ pwd_context = CryptContext(
 )
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica si la contraseña coincide con el hash."""
+    """Verify if the password matches the hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    """Genera un hash de la contraseña."""
+    """Generate a password hash."""
     return pwd_context.hash(password)
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
-    """Crea un token JWT con los datos proporcionados."""
+    """Create a JWT token with the provided data."""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -31,7 +31,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     return encoded_jwt
 
 def verify_token(token: str) -> dict:
-    """Verificar token"""
+    """Verify token"""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload

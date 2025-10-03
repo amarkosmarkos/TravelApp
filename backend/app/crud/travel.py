@@ -16,6 +16,7 @@ from ..database import (
 from ..models.travel import TravelCreate, Travel, ChatCreate, Chat, ChatMessageCreate, ChatMessage, ItineraryCreate, Itinerary, VisitCreate, Visit, PlaceCreate, Place, FlightCreate, Flight, TravelUpdate, Message, MessageCreate
 from app.services.daily_visits_service import daily_visits_service
 from app.services.hotel_suggestions_service import hotel_suggestions_service
+from app.services.transport_plan_service import transport_plan_service
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import logging
@@ -46,7 +47,7 @@ async def create_travel(
     user_id: str
 ) -> Travel:
     try:
-        # Crear el viaje
+        # Create the travel
         travels = await get_travels_collection()
         travel_dict = travel.dict()
         travel_dict["user_id"] = user_id
@@ -56,7 +57,7 @@ async def create_travel(
         result = await travels.insert_one(travel_dict)
         created_travel = await travels.find_one({"_id": result.inserted_id})
         
-        # Crear la conversación inicial
+        # Create initial conversation
         conversations = await get_chats_collection()
         conversation = {
             "travel_id": str(result.inserted_id),
@@ -66,10 +67,10 @@ async def create_travel(
         }
         conversation_result = await conversations.insert_one(conversation)
         
-        # Crear mensaje de bienvenida
+        # Create welcome message
         messages = await get_messages_collection()
         welcome_message = {
-            "message": "¡Bienvenido a tu nuevo viaje! ¿A dónde te gustaría ir?",
+            "message": "Welcome to your new trip! Where would you like to go?",
             "is_user": False,
             "travel_id": str(result.inserted_id),
             "conversation_id": str(conversation_result.inserted_id),
@@ -150,56 +151,66 @@ async def create_itinerary_item(item: Dict[str, Any]) -> Dict[str, Any]:
 
 async def create_or_update_itinerary(itinerary: ItineraryCreate) -> Itinerary:
     """
-    Crea un itinerario si no existe para el travel_id, o lo actualiza si ya existe (relación 1:1).
+    Creates an itinerary if it doesn't exist for the travel_id, or updates it if it already exists (1:1 relationship).
     """
     itineraries = await get_itineraries_collection()
     travel_id = str(itinerary.travel_id)
     
-    # Crear índice único en travel_id si no existe
+    # Create unique index on travel_id if it doesn't exist
     try:
         await itineraries.create_index("travel_id", unique=True)
     except Exception as e:
         logger.warning(f"Index creation warning: {e}")
     
-    # Buscar itinerario existente
+    # Search for existing itinerary
     existing = await itineraries.find_one({"travel_id": travel_id})
     itinerary_dict = itinerary.dict()
-    itinerary_dict["travel_id"] = travel_id  # Asegura que se guarda como string
+    itinerary_dict["travel_id"] = travel_id  # Ensures it's saved as string
     itinerary_dict["updated_at"] = datetime.utcnow()
     
     if existing:
-        # Actualizar itinerario existente
+        # Update existing itinerary
         await itineraries.update_one(
             {"travel_id": travel_id}, 
             {"$set": itinerary_dict}
         )
         updated = await itineraries.find_one({"travel_id": travel_id})
-        # Disparar generación automática de daily_visits
+        # Trigger automatic daily_visits generation
         try:
             await daily_visits_service.generate_and_save_for_travel(travel_id)
         except Exception as e:
             logger.error(f"Error generating daily_visits after update: {e}")
-        # Disparar generación automática de hotel_suggestions en background (no bloqueante)
+        # Trigger automatic hotel_suggestions generation in background (non-blocking)
         try:
             asyncio.create_task(hotel_suggestions_service.generate_and_save_for_travel(travel_id))
         except Exception as e:
             logger.error(f"Error scheduling hotel_suggestions after update: {e}")
+        # Generate transport plan (background to avoid blocking)
+        try:
+            asyncio.create_task(transport_plan_service.generate_and_save_for_travel(travel_id))
+        except Exception as e:
+            logger.error(f"Error scheduling transport plan after update: {e}")
         return Itinerary(**updated)
     else:
-        # Crear nuevo itinerario
+        # Create new itinerary
         itinerary_dict["created_at"] = datetime.utcnow()
         result = await itineraries.insert_one(itinerary_dict)
         created = await itineraries.find_one({"_id": result.inserted_id})
-        # Disparar generación automática de daily_visits
+        # Trigger automatic daily_visits generation
         try:
             await daily_visits_service.generate_and_save_for_travel(travel_id)
         except Exception as e:
             logger.error(f"Error generating daily_visits after create: {e}")
-        # Disparar generación automática de hotel_suggestions en background (no bloqueante)
+        # Trigger automatic hotel_suggestions generation in background (non-blocking)
         try:
             asyncio.create_task(hotel_suggestions_service.generate_and_save_for_travel(travel_id))
         except Exception as e:
             logger.error(f"Error scheduling hotel_suggestions after create: {e}")
+        # Generate transport plan (background to avoid blocking)
+        try:
+            asyncio.create_task(transport_plan_service.generate_and_save_for_travel(travel_id))
+        except Exception as e:
+            logger.error(f"Error scheduling transport plan after create: {e}")
         return Itinerary(**created)
 
 # Visit operations
@@ -254,12 +265,12 @@ async def get_travel_messages(
     db: AsyncIOMotorDatabase,
     travel_id: str
 ) -> List[Message]:
-    # Primero obtener la conversación asociada al viaje
+    # First get the conversation associated with the travel
     conversations = await get_conversations_collection()
     conversation = await conversations.find_one({"travel_id": travel_id})
     
     if not conversation:
-        # Si no existe conversación, crearla
+        # If no conversation exists, create it
         conversation = {
             "travel_id": travel_id,
             "created_at": datetime.utcnow(),
@@ -268,7 +279,7 @@ async def get_travel_messages(
         result = await conversations.insert_one(conversation)
         conversation["_id"] = result.inserted_id
     
-    # Obtener los mensajes de la conversación
+    # Get conversation messages
     messages = await get_messages_collection()
     cursor = messages.find({
         "travel_id": travel_id,

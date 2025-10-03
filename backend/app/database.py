@@ -4,58 +4,58 @@ from typing import Optional
 from .config import settings
 from .utils.logging import logger
 
-# Cliente MongoDB
+# MongoDB client
 client: Optional[AsyncIOMotorClient] = None
 
-# Instancia de la base de datos
+# Database instance
 db = None
 
 async def connect_to_mongodb():
-    """Conecta a la base de datos MongoDB."""
+    """Connect to MongoDB database."""
     global client, db
     try:
-        # Asegurar que la URL no termine en '/'
+        # Ensure URL doesn't end with '/'
         mongodb_url = settings.MONGODB_URL.rstrip('/')
         client = AsyncIOMotorClient(mongodb_url)
-        # Verificar la conexión
+        # Verify connection
         await client.admin.command('ping')
         db = client[settings.DATABASE_NAME]
-        logger.info("Conexión exitosa a MongoDB")
+        logger.info("Successfully connected to MongoDB")
     except Exception as e:
-        logger.error(f"Error al conectar a MongoDB: {str(e)}")
+        logger.error(f"Error connecting to MongoDB: {str(e)}")
         raise
 
 async def close_mongodb_connection():
-    """Cierra la conexión a MongoDB."""
+    """Close MongoDB connection."""
     global client
     if client:
         client.close()
-        logger.info("Conexión a MongoDB cerrada")
+        logger.info("MongoDB connection closed")
 
 async def get_database():
-    """Obtiene la instancia de la base de datos."""
+    """Get database instance."""
     if not client:
-        raise RuntimeError("La conexión a MongoDB no está inicializada")
+        raise RuntimeError("MongoDB connection is not initialized")
     return client[settings.DATABASE_NAME]
 
-# Funciones para obtener colecciones
+# Functions to get collections
 async def get_users_collection():
-    """Obtiene la colección de usuarios."""
+    """Get users collection."""
     database = await get_database()
     return database.users
 
 async def get_travels_collection():
-    """Obtiene la colección de viajes."""
+    """Get travels collection."""
     database = await get_database()
     return database.travels
 
 async def get_chats_collection():
-    """Obtiene la colección de chats."""
+    """Get chats collection."""
     database = await get_database()
     return database.chats
 
 async def get_messages_collection():
-    """Obtiene la colección de mensajes."""
+    """Get messages collection."""
     database = await get_database()
     return database.messages
 
@@ -349,14 +349,14 @@ async def get_flights_collection():
 
 async def get_cities_collection():
     """
-    Obtiene la colección de ciudades de la base de datos.
+    Get cities collection from the database.
     """
     db = await get_database()
     return db.cities
 
 async def get_sites_collection():
     """
-    Obtiene la colección de sitios turísticos de la base de datos.
+    Get tourist sites collection from the database.
     """
     database = await get_database()
     return database.sites 

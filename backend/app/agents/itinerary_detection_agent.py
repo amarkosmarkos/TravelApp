@@ -26,7 +26,7 @@ class ItineraryDetectionAgent:
             itineraries_collection = await get_itineraries_collection()
             
             # Buscar itinerario existente
-            # Detectar por travel_id. Si hay múltiples, tomar el más reciente
+            # Detect by travel_id. If there are multiple, take the most recent
             cursor = itineraries_collection.find({
                 "travel_id": travel_id
             }).sort("updated_at", -1)
@@ -65,7 +65,7 @@ class ItineraryDetectionAgent:
         Analiza la petición del usuario para determinar qué modificación hacer.
         """
         try:
-            # Extraer información del itinerario existente
+            # Extract information from existing itinerary
             current_items = existing_itinerary.get("items", [])
             current_cities = [item.get("city_name") for item in current_items if item.get("city_name")]
             
@@ -118,15 +118,15 @@ class ItineraryDetectionAgent:
         """
         Extrae las ciudades que el usuario quiere añadir.
         """
-        # Implementar lógica de extracción de ciudades
-        # Por ahora, retornar lista vacía
+        # Implement city extraction logic
+        # For now, return empty list
         return []
     
     def _extract_cities_to_remove(self, message: str, current_cities: List[str]) -> List[str]:
         """
         Extrae las ciudades que el usuario quiere quitar.
         """
-        # Implementar lógica de extracción de ciudades a quitar
+        # Implement logic to extract cities to remove
         return []
     
     def _extract_preferences(self, message: str) -> Dict[str, Any]:
@@ -156,14 +156,14 @@ class ItineraryDetectionAgent:
         """
         Extrae cambios en la duración del viaje.
         """
-        # Implementar lógica de extracción de duración
+        # Implement duration extraction logic
         return None
     
     def _extract_priority_change(self, message: str) -> Dict[str, Any]:
         """
         Extrae cambios en las prioridades del viaje.
         """
-        # Implementar lógica de extracción de prioridades
+        # Implement priority extraction logic
         return {}
     
     async def get_available_sites_for_modification(self, country_code: str, current_cities: List[str]) -> Dict[str, Any]:
@@ -175,10 +175,10 @@ class ItineraryDetectionAgent:
             
             db_agent = DatabaseAgent()
             
-            # Obtener todos los sitios del país
+            # Get all sites in the country
             all_sites = await db_agent.search_cities_by_country(country_code)
             
-            # Filtrar sitios que no están en el itinerario actual
+            # Filter sites that are not in the current itinerary
             available_sites = []
             for site in all_sites:
                 if site.get("name") not in current_cities:
@@ -212,14 +212,14 @@ class ItineraryDetectionAgent:
                 "preference_updates": {}
             }
             
-            # Analizar qué ciudades añadir
+            # Analyze which cities to add
             if analysis.get("action_type") == "add_cities":
                 # Sugerir ciudades basadas en preferencias y disponibilidad
                 suggestions["cities_to_add"] = self._suggest_cities_to_add(
                     analysis, available_sites
                 )
             
-            # Analizar optimización de ruta
+            # Analyze route optimization
             if len(analysis.get("cities_to_add", [])) > 0:
                 suggestions["route_optimization"] = True
             
@@ -249,5 +249,5 @@ class ItineraryDetectionAgent:
         """
         Verifica si un sitio coincide con las preferencias del usuario.
         """
-        # Implementar lógica de matching
+        # Implement matching logic
         return True  # Por ahora, retornar True 

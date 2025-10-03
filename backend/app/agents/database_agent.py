@@ -1,5 +1,5 @@
 """
-Agente especializado en consultas a la base de datos MongoDB.
+Agent specialized in MongoDB database queries.
 """
 
 from typing import List, Dict, Any, Optional
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class DatabaseAgent:
     """
-    Agente especializado en consultas a la base de datos MongoDB.
+    Agent specialized in MongoDB database queries.
     """
     
     def __init__(self):
@@ -20,13 +20,13 @@ class DatabaseAgent:
     
     async def search_cities_by_country(self, country_name: str) -> List[Dict[str, Any]]:
         """
-        Busca ciudades en la base de datos por país (solo sites con subtype city).
+        Searches for cities in the database by country (only sites with subtype city).
         """
         try:
-            # Normalizar nombre del país
+            # Normalize country name
             country_name = country_name.lower().strip()
             
-            # Mapeo de países a códigos ISO
+            # Country to ISO code mapping
             country_mapping = {
                 "thailand": "TH",
                 "japan": "JP", 
@@ -63,10 +63,10 @@ class DatabaseAgent:
             
             country_code = country_mapping.get(country_name)
             if not country_code:
-                self.logger.warning(f"Código de país no encontrado para: {country_name}")
+                self.logger.warning(f"Country code not found for: {country_name}")
                 return []
             
-            # Buscar solo en la colección de sitios con subtype city
+            # Search only in sites collection with subtype city
             sites_collection = await get_sites_collection()
             sites = await sites_collection.find(
                 {
