@@ -1,0 +1,16 @@
+{
+  "files": {
+    "main.css": "https://amarkosmarkos.github.io/TravelApp/static/css/main.d4317557.css",
+    "main.js": "https://amarkosmarkos.github.io/TravelApp/static/js/main.cb6786e9.js",
+    "static/js/453.8ab44547.chunk.js": "https://amarkosmarkos.github.io/TravelApp/static/js/453.8ab44547.chunk.js",
+    "static/media/background_lake_mountains.jpg": "https://amarkosmarkos.github.io/TravelApp/static/media/background_lake_mountains.2dd59c7428afa061dc3d.jpg",
+    "index.html": "https://amarkosmarkos.github.io/TravelApp/index.html",
+    "main.d4317557.css.map": "https://amarkosmarkos.github.io/TravelApp/static/css/main.d4317557.css.map",
+    "main.cb6786e9.js.map": "https://amarkosmarkos.github.io/TravelApp/static/js/main.cb6786e9.js.map",
+    "453.8ab44547.chunk.js.map": "https://amarkosmarkos.github.io/TravelApp/static/js/453.8ab44547.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.d4317557.css",
+    "static/js/main.cb6786e9.js"
+  ]
+}
