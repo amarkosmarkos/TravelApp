@@ -68,7 +68,7 @@ export default function TransportSection({ travelId }) {
   const { segments = [], totals = {} } = plan;
 
   return (
-    <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
+    <Box sx={{ p: 2, height: '100%', overflow: 'auto', pb: 6 }}>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
         <Stack direction="row" spacing={2}>

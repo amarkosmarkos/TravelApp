@@ -115,12 +115,14 @@ const CityList = ({ cities = [], selectedCityIndex = 0, onCitySelect }) => {
                                         >
                                             {city.name}
                                         </Typography>
-                                        <Chip 
-                                            label={`Day ${index + 1}`}
-                                            size="small"
-                                            color={selectedCityIndex === index ? 'primary' : 'default'}
-                                            variant={selectedCityIndex === index ? 'filled' : 'outlined'}
-                                        />
+                                        {city.arrival_dt && city.departure_dt && (
+                                            <Chip 
+                                                label={`${new Date(city.arrival_dt).toLocaleDateString('en-GB')} → ${new Date(city.departure_dt).toLocaleDateString('en-GB')}`}
+                                                size="small"
+                                                color={selectedCityIndex === index ? 'primary' : 'default'}
+                                                variant={selectedCityIndex === index ? 'filled' : 'outlined'}
+                                            />
+                                        )}
                                     </Box>
                                     
                                     {/* Secondary content */}

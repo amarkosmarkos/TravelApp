@@ -364,11 +364,36 @@
             travel_id: travelId,
             country: 'thailand',
             cities: [
-              { name: 'Bangkok', coordinates: { latitude: 13.7524938, longitude: 100.4935089 } },
-              { name: 'Ayutthaya', coordinates: { latitude: 14.3535427, longitude: 100.5645684 } },
-              { name: 'Sukhothai', coordinates: { latitude: 17.006139, longitude: 99.823307 } },
-              { name: 'Chiang Mai', coordinates: { latitude: 18.787493, longitude: 98.9672428 } },
-              { name: 'Phuket', coordinates: { latitude: 7.9366015, longitude: 98.3529292 } }
+              { 
+                name: 'Bangkok', 
+                arrival_dt: '2025-10-01T18:42:00Z',
+                departure_dt: '2025-10-04T18:42:00Z',
+                coordinates: { latitude: 13.7524938, longitude: 100.4935089 }
+              },
+              { 
+                name: 'Ayutthaya', 
+                arrival_dt: '2025-10-04T20:12:00Z',
+                departure_dt: '2025-10-06T20:12:00Z',
+                coordinates: { latitude: 14.3535427, longitude: 100.5645684 }
+              },
+              { 
+                name: 'Sukhothai', 
+                arrival_dt: '2025-10-07T00:12:00Z',
+                departure_dt: '2025-10-09T00:12:00Z',
+                coordinates: { latitude: 17.006139, longitude: 99.823307 }
+              },
+              { 
+                name: 'Chiang Mai', 
+                arrival_dt: '2025-10-09T05:12:00Z',
+                departure_dt: '2025-10-12T05:12:00Z',
+                coordinates: { latitude: 18.787493, longitude: 98.9672428 }
+              },
+              { 
+                name: 'Phuket', 
+                arrival_dt: '2025-10-12T07:12:00Z',
+                departure_dt: '2025-10-15T07:12:00Z',
+                coordinates: { latitude: 7.9366015, longitude: 98.3529292 }
+              }
             ],
             generated_at: nowIso(),
           }
