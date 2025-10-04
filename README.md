@@ -168,7 +168,7 @@ This repository uses a **gh-pages** branch deployment:
 - Output: `frontend/build` → published to `gh-pages`
 - SPA fallback: `404.html` copies `index.html`
 
-Your public link: [https://amarkosmarkos.github.io/TravelApp/](https://amarkosmarkos.github.io/TravelApp/)
+Public link: [https://amarkosmarkos.github.io/TravelApp/](https://amarkosmarkos.github.io/TravelApp/)
 
 ---
 
