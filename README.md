@@ -1,199 +1,191 @@
 ## Travel Assistant (FastAPI + React)
 
-An AI-powered end-to-end travel planning app. Users can chat with an assistant to plan trips, automatically get itineraries with time budgets, hotel suggestions, and a transport plan between cities. The backend is built with FastAPI and MongoDB; the frontend is built with React + Material UI.
+An AI-powered travel planning app. Users chat with an assistant to design multi-city trips, receive a day-by-day itinerary, hotel suggestions, and an inter‑city transport plan. The backend is built with FastAPI + MongoDB; the frontend is React + Material UI.
 
-### Key Features
-- Intelligent itinerary creation using multi-agent workflow (destination selection, routing, itinerary generation)
-- Automatic transport plan (home → first city, inter-city, last city → home) with realistic durations and heuristic costs
-- Hotel suggestions auto-generated in the background
-- Real-time updates via WebSocket
-- JWT authentication, protected routes, and CORS configuration
-- Modern React UI with tabs: Chat, Itinerary, Hotels, Transport Plan
+### Live Demo
+- Demo (mocked, no login required): [https://amarkosmarkos.github.io/TravelApp/](https://amarkosmarkos.github.io/TravelApp/)
+- Status badge (GitHub Pages via gh-pages branch): the site updates automatically when the demo build workflow runs.
 
-### Repository Structure (high level)
-- `backend/app`: FastAPI application
-  - `agents/`: Agents for routing, itinerary, detection/modification, workflow graph
-  - `routers/`: API endpoints (`travels`, `auth`, `users`, etc.)
-  - `services/`: Chat, hotel suggestions, daily visits, transport plan, AI matching
-  - `core/`: Scheduler (time budgeting), prompt builder, auth/security helpers
-  - `models/` and `crud/`: Pydantic models and MongoDB CRUD utilities
-  - `config/`: Settings and tools config
-- `frontend/`: React app (MUI-based) with `MainCanvas` and feature sections
+### Highlights
+- **Multi‑agent itinerary generation** (destination selection, routing, detection/modification, itinerary writer)
+- **Transport plan** with realistic durations and heuristic costs between cities
+- **Hotel suggestions** generated in background after itinerary changes
+- **Real‑time chat** over **WebSocket** with streaming assistant messages
+- **JWT** authentication and protected routes (bypassed in demo)
+- Modern **React + MUI** interface with tabs: Chat, Itinerary, Hotels, Transport
+
+### Screenshots
+
+Login
+![Login](readme_images/login.jpg)
+
+Trip configuration
+![Trip configuration](readme_images/trip_config.jpg)
+
+Chat
+![Chat](readme_images/chat.jpg)
+
+Itinerary
+![Itinerary](readme_images/itinerary.jpg)
+
+Hotels
+![Hotels](readme_images/hotels.jpg)
+
+Transport
+![Transport](readme_images/transports.jpg)
+
+> Tip: keep screenshots around 1200×700 for crisp rendering in GitHub.
 
 ---
 
-## Getting Started
+## Quick Start (Mocked Demo)
+
+The demo runs entirely on the frontend with predefined data. No backend or database required.
+
+1) From the repo root:
+   - `cd frontend`
+   - `npm install`
+   - `REACT_APP_MOCK=true npm start`
+2) The app opens at `http://localhost:3000` and skips login, going straight to the chat.
+
+Deployment to GitHub Pages (gh-pages workflow) is already configured in `.github/workflows/gh-pages.yml`.
+
+---
+
+## Architecture (One‑Page Overview)
+
+### Backend (FastAPI + MongoDB)
+- Routers under `/api`, CORS/security middlewares, async Mongo (Motor)
+- Multi‑agent orchestration:
+  - `SmartItineraryWorkflow`: coordinates itinerary detection/modification, DB reads, routing, itinerary creation
+  - `RoutingAgent`: builds a graph and proposes the route order (distance heuristics / TSP‑like)
+  - `ItineraryAgent`: generates day‑by‑day plans from the route + preferences
+  - `TimeBudgetScheduler`: allocates hours per city using total days and transport matrix
+  - `TransportPlanService`: creates the inter‑city plan after itinerary changes
+- Background jobs: hotel suggestions + transport plan generation after itinerary updates
+- WebSocket: `/api/travels/{travel_id}/ws` for live chat
+
+### Frontend (React + MUI)
+- `MainCanvas` layout with tabs: Chat, Itinerary, Hotels, Transport
+- In demo mode the app intercepts `fetch` and WebSocket to serve **mock data**
+- **HashRouter** + `homepage` support for GitHub Pages
+
+---
+
+## Feature Deep‑Dive (What each tab really does)
+
+### Chat
+- Powered by a **GPT‑class Large Language Model (LLM)** that performs intent detection and conversation orchestration.
+- User requests (e.g., “cultural trip”, “add beach days at the end”) trigger the workflow to either create a fresh plan or **modify** the existing one.
+- The assistant streams responses through **WebSocket** and persists messages linked to the current `travel_id`.
+
+### Itinerary
+- The itinerary is produced by a pipeline coordinated by `SmartItineraryWorkflow`:
+  1) A **Routing Agent** builds a graph where nodes are cities (loaded with their **coordinates from MongoDB**) and edges represent **geodesic distances**.
+  2) The agent proposes a near‑optimal visiting order (shortest‑path / TSP‑like heuristic) across all requested cities.
+  3) An **Itinerary Agent** (LLM) writes the day‑by‑day plan aligning with the route and user preferences.
+  4) A **Time Budget Scheduler** assigns hours per city and feeds downstream services (hotels and transport).
+- In the UI you see each city with explicit date ranges (arrival → departure) derived from this schedule.
+
+### Hotels
+- A **Hotel Suggestions Service** calls an external provider API using the itinerary windows (city + check‑in/check‑out) and the user’s preferences.
+- When the itinerary is changed from the chat (e.g., cities reordered or days shifted), the hotel suggestions are **regenerated** in the background and the UI reflects the new results.
+- In the demo (mock) build, these suggestions are deterministic and consistent with the displayed itinerary.
+
+### Transport
+- The transport plan is currently **heuristic‑based** but fully respects the itinerary’s city sequence and durations.
+- It selects a **mode per leg** (car/bus/train/flight/boat) using distance thresholds and adds realistic overheads for total travel time; costs are computed with simple per‑km + fixed‑fee models.
+- Future work can plug real providers without changing the frontend.
+
+> In the mocked GitHub Pages demo, all these components are simulated on the frontend; in full mode the same flow runs against the FastAPI backend and MongoDB.
+
+---
+
+## Mock Mode (Frontend and Backend)
+- Frontend: set **`REACT_APP_MOCK=true`** to enable demo mocks. The app seeds `localStorage` (token/user) and bypasses login.
+- Backend: set **`MOCK_MODE=true`** to return predefined responses (optional; not needed for the GitHub Pages demo).
+
+---
+
+## Local Development (Full Stack)
 
 ### Prerequisites
 - Python 3.10+
 - Node.js 18+
 - MongoDB (local or remote)
-- Azure OpenAI access (for itinerary generation and chat)
+- Azure OpenAI credentials (if not using mock)
 
-### Backend Setup
-1) Create and activate a virtual environment, then install dependencies:
-   - `cd backend`
-   - `pip install -r requirements.txt`
-   - Optional agents extras: `pip install -r requirements_agents.txt`
+### Backend
+1) `cd backend`
+2) `pip install -r requirements.txt`
+3) Create `.env` with at least:
+   - `HOST=0.0.0.0`, `PORT=8000`, `SECRET_KEY=change_me`
+   - `MONGODB_URL=mongodb://localhost:27017`, `DATABASE_NAME=travel_app`
+   - `AZURE_OPENAI_*` variables (omit if `MOCK_MODE=true`)
+   - `MOCK_MODE=false` (or `true` for a backend demo)
+4) Start: `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
 
-2) Create a `.env` file in `backend/app/config` root (or repo root if preferred) with at least:
-   - `DEBUG=true`
-   - `HOST=0.0.0.0`
-   - `PORT=8000`
-   - `MONGODB_URL=mongodb://localhost:27017`
-   - `DATABASE_NAME=travel_app`
-   - `SECRET_KEY=change_me`
-   - `AZURE_OPENAI_API_KEY=...` (omit when MOCK_MODE=true)
-   - `AZURE_OPENAI_ENDPOINT=...` (omit when MOCK_MODE=true)
-   - `AZURE_OPENAI_API_VERSION=2024-02-15-preview` (example; omit when MOCK_MODE=true)
-   - `AZURE_OPENAI_DEPLOYMENT_NAME=...` (omit when MOCK_MODE=true)
-   - `MOCK_MODE=true` (to enable demo responses without external services)
-   - `CORS_ORIGINS=["http://localhost:3000","http://localhost:8000"]`
-   - Optional for realistic home flights:
-     - `HOME_LAT=40.4168`
-     - `HOME_LON=-3.7038`
-   - Optional external keys:
-     - `GOOGLE_MAPS_API_KEY=...`
-
-3) Run the server:
-   - `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
-   - Or: `python -m app.main`
-
-### Frontend Setup
+### Frontend
 1) `cd frontend`
 2) `npm install`
-3) Optional demo mode (no backend required):
-   - Set `REACT_APP_MOCK=true` in your environment before starting the app
-   - `REACT_APP_MOCK=true npm start`
-   This enables a lightweight mock layer that simulates REST/WebSocket responses with demo data.
-
-The app will open at `http://localhost:3000`. The backend defaults to `http://localhost:8000`.
+3) `npm start` (or `REACT_APP_MOCK=true npm start` for demo‑only)
 
 ---
 
-## How It Works (Architecture)
+## GitHub Pages (Live Demo)
 
-### Backend (FastAPI + MongoDB)
-- App initialization in `app/main.py`, CORS + security middlewares, routers included under `/api`
-- MongoDB via Motor (async) with collections for travels, itineraries, messages, places, visits, flights, users, etc.
-- Multi-agent orchestration:
-  - `SmartItineraryWorkflow`: orchestrates itinerary detection/modification, database access, routing, and itinerary generation
-  - `RoutingAgent`: builds a graph with geodesic distances, proposes route order (TSP approx, shortest path, proximity)
-  - `ItineraryAgent`: asks Azure OpenAI to generate detailed itineraries from route & cities
-  - `TimeBudgetScheduler`: allocates time across cities using a transport matrix and user’s total days
-  - `TransportPlanService`: generates the “Transportes” plan automatically on itinerary create/update
-- Background jobs: hotel suggestions and transport plan are scheduled automatically after itinerary changes
-- WebSocket: `/api/travels/{travel_id}/ws` for real-time messages
+This repository uses a **gh-pages** branch deployment:
+- Workflow: `.github/workflows/gh-pages.yml`
+- Build command: `npm ci && REACT_APP_MOCK=true npm run build` (in `frontend/`)
+- Output: `frontend/build` → published to `gh-pages`
+- SPA fallback: `404.html` copies `index.html`
 
-### Frontend (React + MUI)
-- Protected routes and modern UI in `MainCanvas`
-- Tabs:
-  - Chat: talk with the assistant
-  - Itinerary: view itinerary and cities
-  - Hotels: hotel suggestions
-  - Transports: inter-city transport segments (including home legs)
+Your public link: [https://amarkosmarkos.github.io/TravelApp/](https://amarkosmarkos.github.io/TravelApp/)
 
 ---
 
-## Configuration & Environment
-The app reads environment variables in `backend/app/config/settings.py`. Notable settings:
+## API Overview (Backend)
 
-- App & server: `HOST`, `PORT`, `DEBUG`
-- Database: `MONGODB_URL`, `DATABASE_NAME`
-- Azure OpenAI: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT_NAME`
-- Demo: `MOCK_MODE` (backend) and `REACT_APP_MOCK` (frontend)
-- CORS: `CORS_ORIGINS`
-- Optional home coordinates for realistic home flights:
-  - `HOME_LAT`, `HOME_LON`
+All endpoints are under `/api` (JWT‑based auth in `routers/auth.py`). Highlights:
 
-If `HOME_LAT/HOME_LON` are set, the Transport Plan will calculate real distances and durations for the Home legs. If not set, the app uses conservative defaults (e.g., ~10h and a flat cost) to avoid underestimating long-haul flights.
+- Travels: `GET/POST /api/travels`, `GET/PUT/DELETE /api/travels/{id}`
+- Itinerary: `GET/POST /api/travels/{id}/itinerary`
+- Hotels: `GET /api/travels/{id}/hotels/suggestions`
+- Transport: `GET /api/travels/{id}/transport-plan`
+- WebSocket: `GET /api/travels/{id}/ws?token=...`
 
-When `MOCK_MODE=true` in the backend, the chat endpoints return predefined responses and chat history without hitting external services or Mongo writes. When `REACT_APP_MOCK=true` in the frontend, the app intercepts fetch/WebSocket calls to show a fully interactive demo with static data (suitable for GitHub Pages).
-
----
-
-## API Overview
-
-All endpoints are under `/api`. Auth is JWT-based (see `routers/auth.py`). Highlights from `routers/travel.py`:
-
-- Travels
-  - `GET /api/travels`: list travels
-  - `POST /api/travels`: create a travel
-  - `GET /api/travels/{travel_id}`: get a travel
-  - `PUT /api/travels/{travel_id}`: update a travel
-  - `DELETE /api/travels/{travel_id}`: delete a travel and related data
-
-- Itinerary
-  - `GET /api/travels/{travel_id}/itinerary`: get itinerary
-  - `POST /api/travels/{travel_id}/itinerary`: create or update (1:1 per travel)
-
-- Hotels
-  - `GET /api/travels/{travel_id}/hotels/suggestions`: get hotel suggestions (generates if missing)
-
-- Transport Plan (Transportes)
-  - `GET /api/travels/{travel_id}/transport-plan`: returns the transport plan for the travel; generates it on-demand if absent
-
-- WebSocket
-  - `GET /api/travels/{travel_id}/ws?token=...`: bidirectional chat updates and processing
-
-> Note: After creating/updating an itinerary, background tasks generate hotel suggestions and the transport plan automatically. You can also force generation by calling the corresponding GET endpoints.
+> After itinerary changes, background tasks regenerate hotels and transport automatically.
 
 ---
 
 ## Transport Plan (Heuristics)
-Implemented in `TransportPlanService` and `TravelTimeService`:
-
-- Modes
-  - Home → first city and last city → Home are always flights (configurable distance via `HOME_LAT/HOME_LON`)
-  - Inter-city mode chosen by distance thresholds (heuristic):
-    - < 80 km: private car
-    - < 200 km: intercity bus
-    - < 700 km: train
-    - < 2000 km: flight (short/medium haul)
-    - ≥ 2000 km: flight (long-haul)
-  - If either city is recognized as an island (simple keyword heuristic) and distance < 300 km, the method is set to boat
-
-- Durations
-  - Derived from km/h per mode plus station/airport overheads
-  - Flights differentiate domestic vs. international overheads
-
-- Costs (heuristic)
-  - Per-km cost per mode plus flat fees (flights have lower per-km but higher fixed fees)
-  - Conservative defaults if home coordinates are not configured
-
-These heuristics favor realism while remaining deterministic and fast (no external rate-limited services).
+- Home legs (Home ↔ first/last city) default to flight
+- Inter‑city mode chosen by distance thresholds (<80 car, <200 bus, <700 train, <2000 flight)
+- Durations = base speed per mode + overheads (airports/stations)
+- Costs = per‑km + fixed fees (conservative defaults without home coords)
 
 ---
 
-## Development Notes
-
-### Tests
-There are multiple test scripts under `backend/` and `backend/tests/`. You can run selected tests or integrate with `pytest` as needed.
-
-### Troubleshooting
-- 404 on `/transport-plan`: ensure the travel has an itinerary; if not, create/update it first. Verify `HOME_LAT/HOME_LON` if you expect realistic Home legs.
-- Azure OpenAI errors: verify endpoint, deployment name, API version, and API key.
-- CORS/auth errors: confirm `CORS_ORIGINS` and JWT token presence in requests.
-
-### Docker (optional)
-A `docker-compose.yml` is present. You can containerize the backend/frontend and a MongoDB instance with minor adjustments to env variables.
+## Troubleshooting
+- 404 on transport plan: ensure the travel has an itinerary; then load `/transport-plan`
+- Azure OpenAI errors: verify endpoint, deployment, API version, and key
+- CORS/auth: confirm `CORS_ORIGINS` and the JWT token
 
 ---
 
 ## License
-## License
 
-This work is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0).
+This work is licensed under the Creative Commons Attribution‑NonCommercial 4.0 International License (CC BY‑NC 4.0).
 
-This means you are free to:
+You are free to:
 - Share — copy and redistribute the material in any medium or format
 - Adapt — remix, transform, and build upon the material
 
 Under the following terms:
-- Attribution — You must give appropriate credit, provide a link to the license, and indicate if changes were made
-- NonCommercial — You may not use the material for commercial purposes
+- Attribution — give appropriate credit and link to the license
+- NonCommercial — no commercial use
 
-For more details see: https://creativecommons.org/licenses/by-nc/4.0/
+More: https://creativecommons.org/licenses/by-nc/4.0/
 
 © 2024 All rights reserved.
 
