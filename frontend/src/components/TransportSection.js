@@ -42,7 +42,7 @@ export default function TransportSection({ travelId }) {
 
   if (loading) {
     return (
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
         <LinearProgress />
         <Typography variant="body2" sx={{ mt: 2 }}>Loading transport plan…</Typography>
       </Box>
@@ -51,7 +51,7 @@ export default function TransportSection({ travelId }) {
 
   if (error) {
     return (
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
         <Typography color="error">{error}</Typography>
       </Box>
     );
@@ -59,7 +59,7 @@ export default function TransportSection({ travelId }) {
 
   if (!plan) {
     return (
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
         <Typography>No transport plan available.</Typography>
       </Box>
     );
@@ -68,7 +68,7 @@ export default function TransportSection({ travelId }) {
   const { segments = [], totals = {} } = plan;
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 2, height: '100%', overflow: 'auto' }}>
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
         <Stack direction="row" spacing={2}>
