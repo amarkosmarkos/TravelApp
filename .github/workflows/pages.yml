@@ -1,8 +1,6 @@
-name: Deploy Frontend (Mock) to GitHub Pages
+name: Deploy Frontend (Mock) to GitHub Pages (disabled by default)
 
 on:
-  push:
-    branches: [ demo-mock ]
   workflow_dispatch:
 
 permissions:
