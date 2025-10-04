@@ -101,6 +101,9 @@ The demo runs entirely on the frontend with predefined data. No backend or datab
    - `REACT_APP_MOCK=true npm start`
 2) The app opens at `http://localhost:3000` and skips login, going straight to the chat.
 
+- Frontend: set **`REACT_APP_MOCK=true`** to enable demo mocks. The app seeds `localStorage` (token/user) and bypasses login.
+- Backend: set **`MOCK_MODE=true`** to return predefined responses (optional; not needed for the GitHub Pages demo).
+
 Deployment to GitHub Pages (gh-pages workflow) is already configured in `.github/workflows/gh-pages.yml`.
 
 ---
@@ -126,11 +129,6 @@ Deployment to GitHub Pages (gh-pages workflow) is already configured in `.github
 
 ---
 
-## Mock Mode (Frontend and Backend)
-- Frontend: set **`REACT_APP_MOCK=true`** to enable demo mocks. The app seeds `localStorage` (token/user) and bypasses login.
-- Backend: set **`MOCK_MODE=true`** to return predefined responses (optional; not needed for the GitHub Pages demo).
-
----
 
 ## Local Development (Full Stack)
 
@@ -180,21 +178,6 @@ All endpoints are under `/api` (JWT‑based auth in `routers/auth.py`). Highligh
 - WebSocket: `GET /api/travels/{id}/ws?token=...`
 
 > After itinerary changes, background tasks regenerate hotels and transport automatically.
-
----
-
-## Transport Plan (Heuristics)
-- Home legs (Home ↔ first/last city) default to flight
-- Inter‑city mode chosen by distance thresholds (<80 car, <200 bus, <700 train, <2000 flight)
-- Durations = base speed per mode + overheads (airports/stations)
-- Costs = per‑km + fixed fees (conservative defaults without home coords)
-
----
-
-## Troubleshooting
-- 404 on transport plan: ensure the travel has an itinerary; then load `/transport-plan`
-- Azure OpenAI errors: verify endpoint, deployment, API version, and key
-- CORS/auth: confirm `CORS_ORIGINS` and the JWT token
 
 ---
 
