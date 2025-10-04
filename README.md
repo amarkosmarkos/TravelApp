@@ -1,4 +1,4 @@
-<h1 align="center">Travel Assistant (FastAPI + React)</h1>
+<h1 align="center">Travel Assistant</h1>
 
 <p align="center">
   <a href="https://amarkosmarkos.github.io/TravelApp/">
@@ -6,10 +6,15 @@
   </a>
 </p>
 
-<p align="center"><i>interactive AI travel planner</i></p>
+<p align="center"><i>Interactive AI travel planner</i></p>
 
 <div align="center">
   <a href="https://amarkosmarkos.github.io/TravelApp/"><img src="https://img.shields.io/badge/Live%20Demo-TravelApp-0FA1A1?style=for-the-badge" alt="Live Demo" /></a>
+</div>
+
+<div align="center" style="margin: 16px 0;">
+  <h3>🚀 AI-Powered Travel Assistant</h3>
+  <p><b>Multi-agent orchestration with LangGraph • Azure LLMs • React • FastAPI • MongoDB</b></p>
 </div>
 
 <div align="center" style="margin-top: 8px;">
