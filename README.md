@@ -1,10 +1,30 @@
-## Travel Assistant (FastAPI + React)
+<h1 align="center">Travel Assistant (FastAPI + React)</h1>
 
-An AI-powered travel planning app. Users chat with an assistant to design multi-city trips, receive a day-by-day itinerary, hotel suggestions, and an inter‑city transport plan. The backend is built with FastAPI + MongoDB; the frontend is React + Material UI.
+<p align="center">
+  <a href="https://amarkosmarkos.github.io/TravelApp/">
+    <img src="readme_images/login.jpg" width="96" alt="App icon preview" />
+  </a>
+</p>
 
-### Live Demo
-- Demo (mocked, no login required): [https://amarkosmarkos.github.io/TravelApp/](https://amarkosmarkos.github.io/TravelApp/)
-- Status badge (GitHub Pages via gh-pages branch): the site updates automatically when the demo build workflow runs.
+<p align="center"><i>interactive AI travel planner</i></p>
+
+<div align="center">
+  <a href="https://amarkosmarkos.github.io/TravelApp/"><img src="https://img.shields.io/badge/Live%20Demo-TravelApp-0FA1A1?style=for-the-badge" alt="Live Demo" /></a>
+</div>
+
+<div align="center" style="margin-top: 8px;">
+  <img src="https://img.shields.io/badge/AI-GPT%20Agents-7E57C2?style=flat-square" alt="AI Agents badge" />
+  <img src="https://img.shields.io/badge/Frontend-React%20%2B%20MUI-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React badge" />
+  <img src="https://img.shields.io/badge/Backend-FastAPI%20%2B%20MongoDB-009688?style=flat-square" alt="FastAPI badge" />
+</div>
+
+<p align="center">
+  <a href="https://github.com/amarkosmarkos/TravelApp">🐱 Repository</a>
+  ·
+  <a href="https://amarkosmarkos.github.io/TravelApp/">📍 Live Demo</a>
+</p>
+
+An AI‑powered travel planning app. Users chat with an assistant to design multi‑city trips, receive a day‑by‑day itinerary, hotel suggestions, and an inter‑city transport plan. Backend: FastAPI + MongoDB. Frontend: React + Material UI.
 
 ### Highlights
 - **Multi‑agent itinerary generation** (destination selection, routing, detection/modification, itinerary writer)
@@ -14,27 +34,60 @@ An AI-powered travel planning app. Users chat with an assistant to design multi-
 - **JWT** authentication and protected routes (bypassed in demo)
 - Modern **React + MUI** interface with tabs: Chat, Itinerary, Hotels, Transport
 
-### Screenshots
+## Feature Deep‑Dive (What each tab really does)
 
-Login
-![Login](readme_images/login.jpg)
+### Walkthrough
 
-Trip configuration
-![Trip configuration](readme_images/trip_config.jpg)
+<p align="center"><b>1) Login (mock bypassed in demo)</b></p>
+<p align="center"><img src="readme_images/login.jpg" width="900" /></p>
 
-Chat
-![Chat](readme_images/chat.jpg)
+<p align="center"><b>2) Trip configuration (hidden in demo, auto‑seeded)</b></p>
+<p align="center"><img src="readme_images/trip_config.jpg" width="900" /></p>
 
-Itinerary
-![Itinerary](readme_images/itinerary.jpg)
 
-Hotels
-![Hotels](readme_images/hotels.jpg)
+<p align="center"><b>3) Chat with the AI assistant</b></p>
+<p align="center">
+  <i>
+    Powered by a <b>GPT‑class Large Language Model (LLM)</b> that performs intent detection and conversation orchestration.<br/>
+    User requests (e.g., "cultural trip", "add beach days at the end") trigger the workflow to either create a fresh plan or <b>modify</b> the existing one.<br/>
+    The assistant streams responses through <b>WebSocket</b> and persists messages linked to the current <code>travel_id</code>.
+  </i>
+</p>
+<p align="center"><img src="readme_images/chat.jpg" width="900" height="500" style="object-fit: contain;" /></p>
 
-Transport
-![Transport](readme_images/transports.jpg)
+<p align="center"><b>4) Itinerary: dates and cities</b></p>
+<p align="center">
+  <i>
+    The itinerary is produced by a <b>LangGraph</b> orchestrated pipeline coordinated by <code>SmartItineraryWorkflow</code>:<br/>
+    1) A <b>Routing Agent</b> builds a graph where nodes are cities (loaded with their <b>coordinates from MongoDB</b>) and edges represent <b>geodesic distances</b>.<br/>
+    2) The agent proposes a near‑optimal visiting order (shortest‑path / TSP‑like heuristic) across all requested cities.<br/>
+    3) An <b>Itinerary Agent</b> (LLM) writes the day‑by‑day plan aligning with the route and user preferences.<br/>
+    4) A <b>Time Budget Scheduler</b> assigns hours per city and feeds downstream services (hotels and transport).<br/>
+    In the UI you see each city with explicit date ranges (arrival → departure) derived from this schedule.
+  </i>
+</p>
+<p align="center"><img src="readme_images/itinerary.jpg" width="900" height="500" style="object-fit: contain;" /></p>
 
-> Tip: keep screenshots around 1200×700 for crisp rendering in GitHub.
+<p align="center"><b>5) Hotels: suggestions per city window</b></p>
+<p align="center">
+  <i>
+    A <b>Hotel Suggestions Service</b> calls an external provider API using the itinerary windows (city + check‑in/check‑out) and the user's preferences.<br/>
+    When the itinerary is changed from the chat (e.g., cities reordered or days shifted), the hotel suggestions are <b>regenerated</b> in the background and the UI reflects the new results.<br/>
+    In the demo (mock) build, these suggestions are deterministic and consistent with the displayed itinerary.
+  </i>
+</p>
+<p align="center"><img src="readme_images/hotels.jpg" width="900" height="500" style="object-fit: contain;" /></p>
+
+<p align="center"><b>6) Transport: inter‑city plan</b></p>
+<p align="center">
+  <i>
+    The transport plan is currently <b>heuristic‑based</b> but fully respects the itinerary's city sequence and durations.<br/>
+    It selects a <b>mode per leg</b> (car/bus/train/flight/boat) using distance thresholds and adds realistic overheads for total travel time; costs are computed with simple per‑km + fixed‑fee models.<br/>
+    Future work can plug real providers without changing the frontend.
+  </i>
+</p>
+<p align="center"><img src="readme_images/transports.jpg" width="900" height="500" style="object-fit: contain;" /></p>
+
 
 ---
 
@@ -56,7 +109,7 @@ Deployment to GitHub Pages (gh-pages workflow) is already configured in `.github
 
 ### Backend (FastAPI + MongoDB)
 - Routers under `/api`, CORS/security middlewares, async Mongo (Motor)
-- Multi‑agent orchestration:
+- Multi‑agent orchestration with **LangGraph**:
   - `SmartItineraryWorkflow`: coordinates itinerary detection/modification, DB reads, routing, itinerary creation
   - `RoutingAgent`: builds a graph and proposes the route order (distance heuristics / TSP‑like)
   - `ItineraryAgent`: generates day‑by‑day plans from the route + preferences
@@ -70,34 +123,6 @@ Deployment to GitHub Pages (gh-pages workflow) is already configured in `.github
 - In demo mode the app intercepts `fetch` and WebSocket to serve **mock data**
 - **HashRouter** + `homepage` support for GitHub Pages
 
----
-
-## Feature Deep‑Dive (What each tab really does)
-
-### Chat
-- Powered by a **GPT‑class Large Language Model (LLM)** that performs intent detection and conversation orchestration.
-- User requests (e.g., “cultural trip”, “add beach days at the end”) trigger the workflow to either create a fresh plan or **modify** the existing one.
-- The assistant streams responses through **WebSocket** and persists messages linked to the current `travel_id`.
-
-### Itinerary
-- The itinerary is produced by a pipeline coordinated by `SmartItineraryWorkflow`:
-  1) A **Routing Agent** builds a graph where nodes are cities (loaded with their **coordinates from MongoDB**) and edges represent **geodesic distances**.
-  2) The agent proposes a near‑optimal visiting order (shortest‑path / TSP‑like heuristic) across all requested cities.
-  3) An **Itinerary Agent** (LLM) writes the day‑by‑day plan aligning with the route and user preferences.
-  4) A **Time Budget Scheduler** assigns hours per city and feeds downstream services (hotels and transport).
-- In the UI you see each city with explicit date ranges (arrival → departure) derived from this schedule.
-
-### Hotels
-- A **Hotel Suggestions Service** calls an external provider API using the itinerary windows (city + check‑in/check‑out) and the user’s preferences.
-- When the itinerary is changed from the chat (e.g., cities reordered or days shifted), the hotel suggestions are **regenerated** in the background and the UI reflects the new results.
-- In the demo (mock) build, these suggestions are deterministic and consistent with the displayed itinerary.
-
-### Transport
-- The transport plan is currently **heuristic‑based** but fully respects the itinerary’s city sequence and durations.
-- It selects a **mode per leg** (car/bus/train/flight/boat) using distance thresholds and adds realistic overheads for total travel time; costs are computed with simple per‑km + fixed‑fee models.
-- Future work can plug real providers without changing the frontend.
-
-> In the mocked GitHub Pages demo, all these components are simulated on the frontend; in full mode the same flow runs against the FastAPI backend and MongoDB.
 
 ---
 
@@ -177,15 +202,7 @@ All endpoints are under `/api` (JWT‑based auth in `routers/auth.py`). Highligh
 
 This work is licensed under the Creative Commons Attribution‑NonCommercial 4.0 International License (CC BY‑NC 4.0).
 
-You are free to:
-- Share — copy and redistribute the material in any medium or format
-- Adapt — remix, transform, and build upon the material
 
-Under the following terms:
-- Attribution — give appropriate credit and link to the license
-- NonCommercial — no commercial use
-
-More: https://creativecommons.org/licenses/by-nc/4.0/
 
 © 2024 All rights reserved.
 
