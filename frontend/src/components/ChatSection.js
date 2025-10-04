@@ -9,6 +9,13 @@ import TravelSetup from './TravelSetup';
 
 const ChatSection = ({ travelId }) => {
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const isMock = (() => {
+        try {
+            const envFlag = (typeof process !== 'undefined' && process && process.env && process.env.REACT_APP_MOCK);
+            const winFlag = (typeof window !== 'undefined' && window.REACT_APP_MOCK);
+            return String(envFlag || winFlag || 'true').toLowerCase() === 'true';
+        } catch (e) { return true; }
+    })();
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [connected, setConnected] = useState(false);
@@ -43,7 +50,22 @@ const ChatSection = ({ travelId }) => {
             const key = `travel-config-${travelId}`;
             const saved = localStorage.getItem(key);
             if (!saved) {
-                setShowTravelSetup(true);
+                if (isMock) {
+                    const mockConfig = {
+                        start_date: new Date().toISOString(),
+                        total_days: 14,
+                        country: 'thailand',
+                        origin_city: '',
+                        companions: 'solo',
+                        preferences: {},
+                        travel_id: travelId
+                    };
+                    try { localStorage.setItem(key, JSON.stringify(mockConfig)); } catch {}
+                    setTravelConfig(mockConfig);
+                    setShowTravelSetup(false);
+                } else {
+                    setShowTravelSetup(true);
+                }
             } else {
                 try {
                     setTravelConfig(JSON.parse(saved));
@@ -387,7 +409,7 @@ const ChatSection = ({ travelId }) => {
                     <Typography variant="h6" color="primary">
                         Travel Assistant
                     </Typography>
-                    {!travelConfig && (
+                    {!travelConfig && !isMock && (
                         <Button 
                             variant="outlined" 
                             onClick={showSetupForm}
